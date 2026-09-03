@@ -7,13 +7,32 @@ import {
 import DiagramEdge from './DiagramEdge.vue'
 import DiagramNode from './DiagramNode.vue'
 
+import type { DiagramNode as DiagramNodeType } from '@/features/diagram/types'
+
 import { useEditorStore } from '@/stores/editor'
 
 const store = useEditorStore()
 
-const canvas = ref<HTMLElement | null>(null)
+const canvas =
+  ref<HTMLElement | null>(null)
 
 const isPanning = ref(false)
+
+const isDraggingNode =
+  ref(false)
+
+const dragNodeId =
+  ref<string | null>(null)
+
+const dragStart = ref({
+  x: 0,
+  y: 0,
+})
+
+const nodeStart = ref({
+  x: 0,
+  y: 0,
+})
 
 const lastPointer = ref({
   x: 0,
@@ -21,18 +40,16 @@ const lastPointer = ref({
 })
 
 const transform = computed(
-  () => `translate(${store.offset.x} ${store.offset.y}) scale(${store.zoom})`,
+  () =>
+    `translate(${store.offset.x} ${store.offset.y}) scale(${store.zoom})`,
 )
 
 function startPan(
   event: PointerEvent,
 ) {
-  if (event.button !== 0) return;
-
-  const target =
-    event.target as HTMLElement
-
-  if (target.closest('.diagram-node')) return;
+  if (event.button !== 0) {
+    return
+  }
 
   isPanning.value = true
 
@@ -41,16 +58,25 @@ function startPan(
     y: event.clientY,
   }
 
-  canvas.value?.setPointerCapture(event.pointerId)
+  canvas.value?.setPointerCapture(
+    event.pointerId,
+  )
 }
 
 function movePan(
   event: PointerEvent,
 ) {
-  if (!isPanning.value) return;
+  if (!isPanning.value) {
+    return
+  }
 
-  const dx = event.clientX - lastPointer.value.x
-  const dy = event.clientY - lastPointer.value.y
+  const dx =
+    event.clientX -
+    lastPointer.value.x
+
+  const dy =
+    event.clientY -
+    lastPointer.value.y
 
   store.setOffset(
     store.offset.x + dx,
@@ -79,6 +105,103 @@ function stopPan(
   }
 }
 
+function startNodeDrag(
+  event: PointerEvent,
+  node: DiagramNodeType,
+) {
+  event.stopPropagation()
+
+  isDraggingNode.value = true
+
+  dragNodeId.value = node.id
+
+  dragStart.value = {
+    x: event.clientX,
+    y: event.clientY,
+  }
+
+  nodeStart.value = {
+    x: node.x,
+    y: node.y,
+  }
+
+  canvas.value?.setPointerCapture(
+    event.pointerId,
+  )
+}
+
+function moveNode(
+  event: PointerEvent,
+) {
+  if (
+    !isDraggingNode.value ||
+    !dragNodeId.value
+  ) {
+    return
+  }
+
+  const dx =
+    (event.clientX -
+      dragStart.value.x) /
+    store.zoom
+
+  const dy =
+    (event.clientY -
+      dragStart.value.y) /
+    store.zoom
+
+  store.updateNodePosition(
+    dragNodeId.value,
+
+    nodeStart.value.x + dx,
+
+    nodeStart.value.y + dy,
+  )
+}
+
+function stopNodeDrag(
+  event: PointerEvent,
+) {
+  isDraggingNode.value = false
+  dragNodeId.value = null
+
+  if (
+    canvas.value?.hasPointerCapture(
+      event.pointerId,
+    )
+  ) {
+    canvas.value.releasePointerCapture(
+      event.pointerId,
+    )
+  }
+}
+
+function handlePointerMove(
+  event: PointerEvent,
+) {
+  if (isDraggingNode.value) {
+    moveNode(event)
+    return
+  }
+
+  if (isPanning.value) {
+    movePan(event)
+  }
+}
+
+function handlePointerUp(
+  event: PointerEvent,
+) {
+  if (isDraggingNode.value) {
+    stopNodeDrag(event)
+    return
+  }
+
+  if (isPanning.value) {
+    stopPan(event)
+  }
+}
+
 function handleWheel(
   event: WheelEvent,
 ) {
@@ -99,12 +222,14 @@ function handleWheel(
 
   const oldZoom = store.zoom
 
-  const zoomFactor =
-    event.deltaY < 0 ? 1.1 : 0.9
+  const factor =
+    event.deltaY < 0
+      ? 1.1
+      : 0.9
 
   const newZoom = Math.min(
     Math.max(
-      oldZoom * zoomFactor,
+      oldZoom * factor,
       0.2,
     ),
     3,
@@ -118,25 +243,26 @@ function handleWheel(
     (mouseY - store.offset.y) /
     oldZoom
 
-  const newOffsetX =
-    mouseX -
-    diagramX * newZoom
+  const newOffset = {
+    x:
+      mouseX -
+      diagramX * newZoom,
 
-  const newOffsetY =
-    mouseY -
-    diagramY * newZoom
+    y:
+      mouseY -
+      diagramY * newZoom,
+  }
 
   store.updateViewport(
     newZoom,
-    {
-      x: newOffsetX,
-      y: newOffsetY,
-    },
+    newOffset,
   )
 }
 
 function fit() {
-  if (!canvas.value) return;
+  if (!canvas.value) {
+    return
+  }
 
   const rect = canvas.value.getBoundingClientRect()
 
@@ -145,28 +271,16 @@ function fit() {
     rect.height,
   )
 }
-
-function clearSelection(
-  event: MouseEvent,
-) {
-  if (
-    event.target ===
-    event.currentTarget
-  ) {
-    store.selectNode(null)
-  }
-}
 </script>
 
 <template>
   <div
     ref="canvas"
     class="canvas"
-    @click="clearSelection"
     @pointerdown="startPan"
-    @pointermove="movePan"
-    @pointerup="stopPan"
-    @pointercancel="stopPan"
+    @pointermove="handlePointerMove"
+    @pointerup="handlePointerUp"
+    @pointercancel="handlePointerUp"
     @wheel="handleWheel"
   >
     <svg
@@ -204,9 +318,18 @@ function clearSelection(
           :key="node.id"
           :node="node"
           :selected="
-            store.selectedNodeId === node.id
+            store.selectedNodeId ===
+            node.id
           "
           @select="store.selectNode"
+          @drag-start="
+            startNodeDrag
+          "
+        />
+
+        <g
+          v-if="isDraggingNode"
+          class="drag-indicator"
         />
       </g>
     </svg>
@@ -216,10 +339,11 @@ function clearSelection(
       @pointerdown.stop
       @pointermove.stop
       @pointerup.stop
+      @wheel.stop
     >
       <button
         title="Zoom out"
-        @click.stop="store.zoomOut"
+        @click="store.zoomOut"
       >
         −
       </button>
@@ -230,14 +354,14 @@ function clearSelection(
 
       <button
         title="Zoom in"
-        @click.stop="store.zoomIn"
+        @click="store.zoomIn"
       >
         +
       </button>
 
       <button
         title="Fit diagram"
-        @click.stop="fit"
+        @click="fit"
       >
         Fit
       </button>
@@ -248,6 +372,7 @@ function clearSelection(
 <style scoped>
 .canvas {
   position: relative;
+
   width: 100%;
   height: 100%;
 
@@ -263,6 +388,8 @@ function clearSelection(
   background-size: 24px 24px;
 
   cursor: grab;
+
+  user-select: none;
 }
 
 .canvas:active {
@@ -270,12 +397,19 @@ function clearSelection(
 }
 
 .diagram {
+  display: block;
+
   width: 100%;
   height: 100%;
 }
 
+.arrow-head {
+  fill: var(--edge-color);
+}
+
 .zoom-controls {
   position: absolute;
+
   right: 16px;
   bottom: 16px;
 
@@ -289,12 +423,17 @@ function clearSelection(
   border-radius: 8px;
 
   background: var(--surface);
-  box-shadow: 0 4px 20px rgb(0 0 0 / 10%);
+
+  box-shadow:
+    0 4px 20px rgb(0 0 0 / 10%);
+
+  user-select: none;
 }
 
 .zoom-controls button {
   border: 0;
   border-radius: 5px;
+
   padding: 5px 9px;
 
   background: transparent;
@@ -309,11 +448,9 @@ function clearSelection(
 
 .zoom-controls span {
   min-width: 48px;
-  text-align: center;
-  font-size: 12px;
-}
 
-.arrow-head {
-  fill: var(--edge-color);
+  text-align: center;
+
+  font-size: 12px;
 }
 </style>

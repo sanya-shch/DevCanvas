@@ -1,21 +1,42 @@
 <script setup lang="ts">
 import type { DiagramNode } from '@/features/diagram/types'
 
-defineProps<{
+const props = defineProps<{
   node: DiagramNode
   selected: boolean
 }>()
 
 const emit = defineEmits<{
   select: [id: string]
+  dragStart: [
+    event: PointerEvent,
+    node: DiagramNode,
+  ]
 }>()
+
+function handlePointerDown(
+  event: PointerEvent,
+) {
+  event.stopPropagation()
+
+  emit(
+    'select',
+    props.node.id,
+  )
+
+  emit(
+    'dragStart',
+    event,
+    props.node,
+  )
+}
 </script>
 
 <template>
   <g
     class="diagram-node"
     :class="{ selected }"
-    @click.stop="emit('select', node.id)"
+    @pointerdown="handlePointerDown"
   >
     <rect
       :x="node.x"
@@ -38,13 +59,17 @@ const emit = defineEmits<{
 
 <style scoped>
 .diagram-node {
-  cursor: pointer;
+  cursor: move;
 }
 
 .diagram-node rect {
   fill: var(--node-bg);
   stroke: var(--node-border);
   stroke-width: 2;
+}
+
+.diagram-node:hover rect {
+  stroke: var(--accent);
 }
 
 .diagram-node.selected rect {
@@ -54,8 +79,14 @@ const emit = defineEmits<{
 
 .diagram-node text {
   fill: var(--text-primary);
+
   font-size: 14px;
-  font-family: Inter, system-ui, sans-serif;
+  font-family:
+    Inter,
+    system-ui,
+    sans-serif;
+
   pointer-events: none;
+  user-select: none;
 }
 </style>

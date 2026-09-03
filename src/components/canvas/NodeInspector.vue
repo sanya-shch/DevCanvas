@@ -1,18 +1,80 @@
 <script setup lang="ts">
+import {
+  computed,
+  ref,
+  watch,
+} from 'vue'
+
 import { useEditorStore } from '@/stores/editor'
 
 const store = useEditorStore()
+
+const label = ref('')
+const width = ref(140)
+const height = ref(60)
+
+const node = computed(
+  () => store.selectedNode,
+)
+
+watch(
+  node,
+  (value) => {
+    if (!value) {
+      return
+    }
+
+    label.value = value.label
+    width.value = value.width
+    height.value = value.height
+  },
+  {
+    immediate: true,
+  },
+)
+
+function applyChanges() {
+  if (!node.value) {
+    return
+  }
+
+  store.updateNode(
+    node.value.id,
+    {
+      label: label.value,
+      width: Math.max(
+        60,
+        width.value,
+      ),
+      height: Math.max(
+        40,
+        height.value,
+      ),
+    },
+  )
+}
+
+function removeNode() {
+  if (!node.value) {
+    return
+  }
+
+  store.deleteNode(
+    node.value.id,
+  )
+}
 </script>
 
 <template>
   <aside
-    v-if="store.selectedNode"
+    v-if="node"
     class="inspector"
   >
     <div class="inspector-header">
       <strong>Node</strong>
 
       <button
+        class="close-button"
         @click="store.selectNode(null)"
       >
         ×
@@ -23,7 +85,7 @@ const store = useEditorStore()
       <label>ID</label>
 
       <input
-        :value="store.selectedNode.id"
+        :value="node.id"
         disabled
       />
     </div>
@@ -32,37 +94,9 @@ const store = useEditorStore()
       <label>Label</label>
 
       <input
-        :value="store.selectedNode.label"
-        disabled
+        v-model="label"
+        @keydown.enter="applyChanges"
       />
-    </div>
-
-    <div class="field-row">
-      <div class="field">
-        <label>X</label>
-
-        <input
-          :value="
-            Math.round(
-              store.selectedNode.x,
-            )
-          "
-          disabled
-        />
-      </div>
-
-      <div class="field">
-        <label>Y</label>
-
-        <input
-          :value="
-            Math.round(
-              store.selectedNode.y,
-            )
-          "
-          disabled
-        />
-      </div>
     </div>
 
     <div class="field-row">
@@ -70,10 +104,10 @@ const store = useEditorStore()
         <label>Width</label>
 
         <input
-          :value="
-            store.selectedNode.width
-          "
-          disabled
+          v-model.number="width"
+          type="number"
+          min="60"
+          @keydown.enter="applyChanges"
         />
       </div>
 
@@ -81,13 +115,27 @@ const store = useEditorStore()
         <label>Height</label>
 
         <input
-          :value="
-            store.selectedNode.height
-          "
-          disabled
+          v-model.number="height"
+          type="number"
+          min="40"
+          @keydown.enter="applyChanges"
         />
       </div>
     </div>
+
+    <button
+      class="apply-button"
+      @click="applyChanges"
+    >
+      Apply changes
+    </button>
+
+    <button
+      class="delete-button"
+      @click="removeNode"
+    >
+      Delete node
+    </button>
   </aside>
 </template>
 
@@ -98,7 +146,7 @@ const store = useEditorStore()
   top: 16px;
   right: 16px;
 
-  width: 220px;
+  width: 240px;
 
   padding: 14px;
 
@@ -119,7 +167,7 @@ const store = useEditorStore()
   margin-bottom: 16px;
 }
 
-.inspector-header button {
+.close-button {
   border: 0;
 
   background: transparent;
@@ -149,6 +197,7 @@ const store = useEditorStore()
 
 label {
   color: var(--text-secondary);
+
   font-size: 11px;
 }
 
@@ -160,9 +209,43 @@ input {
 
   padding: 7px 8px;
 
+  outline: none;
+
   background: var(--editor-bg);
   color: var(--text-primary);
 
   font-size: 12px;
+}
+
+input:focus {
+  border-color: var(--accent);
+}
+
+.apply-button,
+.delete-button {
+  width: 100%;
+
+  border: 0;
+  border-radius: 6px;
+
+  padding: 8px;
+
+  cursor: pointer;
+}
+
+.apply-button {
+  background: var(--accent);
+  color: white;
+}
+
+.delete-button {
+  margin-top: 8px;
+
+  background: transparent;
+  color: #ef4444;
+}
+
+.delete-button:hover {
+  background: rgb(239 68 68 / 10%);
 }
 </style>

@@ -146,6 +146,46 @@ export const useEditorStore = defineStore("editor", () => {
     updateViewport(nextZoom, nextOffset);
   }
 
+  function updateNodePosition(nodeId: string, x: number, y: number) {
+    const node = document.value.nodes.find((item) => item.id === nodeId);
+
+    if (!node) {
+      return;
+    }
+
+    node.x = x;
+    node.y = y;
+  }
+
+  function updateNode(
+    nodeId: string,
+    updates: Partial<{
+      label: string;
+      width: number;
+      height: number;
+    }>,
+  ) {
+    const node = document.value.nodes.find((item) => item.id === nodeId);
+
+    if (!node) {
+      return;
+    }
+
+    Object.assign(node, updates);
+  }
+
+  function deleteNode(nodeId: string) {
+    document.value.nodes = document.value.nodes.filter((node) => node.id !== nodeId);
+
+    document.value.edges = document.value.edges.filter(
+      (edge) => edge.from !== nodeId && edge.to !== nodeId,
+    );
+
+    if (selectedNodeId.value === nodeId) {
+      selectedNodeId.value = null;
+    }
+  }
+
   parse();
 
   return {
@@ -170,5 +210,9 @@ export const useEditorStore = defineStore("editor", () => {
     setOffset,
     updateViewport,
     fitToScreen,
+
+    updateNodePosition,
+    updateNode,
+    deleteNode,
   };
 });
