@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import {
+  computed,
+  ref,
+} from 'vue'
 
 import DiagramEdge from './DiagramEdge.vue'
 import DiagramNode from './DiagramNode.vue'
@@ -18,14 +21,18 @@ const lastPointer = ref({
 })
 
 const transform = computed(
-  () =>
-    `translate(${store.offset.x} ${store.offset.y}) scale(${store.zoom})`,
+  () => `translate(${store.offset.x} ${store.offset.y}) scale(${store.zoom})`,
 )
 
-function startPan(event: PointerEvent) {
-  if (event.button !== 0) {
-    return
-  }
+function startPan(
+  event: PointerEvent,
+) {
+  if (event.button !== 0) return;
+
+  const target =
+    event.target as HTMLElement
+
+  if (target.closest('.diagram-node')) return;
 
   isPanning.value = true
 
@@ -37,10 +44,10 @@ function startPan(event: PointerEvent) {
   canvas.value?.setPointerCapture(event.pointerId)
 }
 
-function movePan(event: PointerEvent) {
-  if (!isPanning.value) {
-    return
-  }
+function movePan(
+  event: PointerEvent,
+) {
+  if (!isPanning.value) return;
 
   const dx = event.clientX - lastPointer.value.x
   const dy = event.clientY - lastPointer.value.y
@@ -56,19 +63,97 @@ function movePan(event: PointerEvent) {
   }
 }
 
-function stopPan(event: PointerEvent) {
+function stopPan(
+  event: PointerEvent,
+) {
   isPanning.value = false
 
-  canvas.value?.releasePointerCapture(event.pointerId)
+  if (
+    canvas.value?.hasPointerCapture(
+      event.pointerId,
+    )
+  ) {
+    canvas.value.releasePointerCapture(
+      event.pointerId,
+    )
+  }
 }
 
-function handleWheel(event: WheelEvent) {
+function handleWheel(
+  event: WheelEvent,
+) {
   event.preventDefault()
 
-  if (event.deltaY < 0) {
-    store.zoomIn()
-  } else {
-    store.zoomOut()
+  if (!canvas.value) {
+    return
+  }
+
+  const rect =
+    canvas.value.getBoundingClientRect()
+
+  const mouseX =
+    event.clientX - rect.left
+
+  const mouseY =
+    event.clientY - rect.top
+
+  const oldZoom = store.zoom
+
+  const zoomFactor =
+    event.deltaY < 0 ? 1.1 : 0.9
+
+  const newZoom = Math.min(
+    Math.max(
+      oldZoom * zoomFactor,
+      0.2,
+    ),
+    3,
+  )
+
+  const diagramX =
+    (mouseX - store.offset.x) /
+    oldZoom
+
+  const diagramY =
+    (mouseY - store.offset.y) /
+    oldZoom
+
+  const newOffsetX =
+    mouseX -
+    diagramX * newZoom
+
+  const newOffsetY =
+    mouseY -
+    diagramY * newZoom
+
+  store.updateViewport(
+    newZoom,
+    {
+      x: newOffsetX,
+      y: newOffsetY,
+    },
+  )
+}
+
+function fit() {
+  if (!canvas.value) return;
+
+  const rect = canvas.value.getBoundingClientRect()
+
+  store.fitToScreen(
+    rect.width,
+    rect.height,
+  )
+}
+
+function clearSelection(
+  event: MouseEvent,
+) {
+  if (
+    event.target ===
+    event.currentTarget
+  ) {
+    store.selectNode(null)
   }
 }
 </script>
@@ -77,6 +162,7 @@ function handleWheel(event: WheelEvent) {
   <div
     ref="canvas"
     class="canvas"
+    @click="clearSelection"
     @pointerdown="startPan"
     @pointermove="movePan"
     @pointerup="stopPan"
@@ -100,7 +186,7 @@ function handleWheel(event: WheelEvent) {
         >
           <path
             d="M0,0 L0,6 L9,3 z"
-            fill="currentColor"
+            class="arrow-head"
           />
         </marker>
       </defs>
@@ -117,14 +203,24 @@ function handleWheel(event: WheelEvent) {
           v-for="node in store.document.nodes"
           :key="node.id"
           :node="node"
-          :selected="store.selectedNodeId === node.id"
+          :selected="
+            store.selectedNodeId === node.id
+          "
           @select="store.selectNode"
         />
       </g>
     </svg>
 
-    <div class="zoom-controls">
-      <button @click.stop="store.zoomOut">
+    <div
+      class="zoom-controls"
+      @pointerdown.stop
+      @pointermove.stop
+      @pointerup.stop
+    >
+      <button
+        title="Zoom out"
+        @click.stop="store.zoomOut"
+      >
         −
       </button>
 
@@ -132,12 +228,18 @@ function handleWheel(event: WheelEvent) {
         {{ Math.round(store.zoom * 100) }}%
       </span>
 
-      <button @click.stop="store.zoomIn">
+      <button
+        title="Zoom in"
+        @click.stop="store.zoomIn"
+      >
         +
       </button>
 
-      <button @click.stop="store.resetZoom">
-        Reset
+      <button
+        title="Fit diagram"
+        @click.stop="fit"
+      >
+        Fit
       </button>
     </div>
   </div>
@@ -148,14 +250,18 @@ function handleWheel(event: WheelEvent) {
   position: relative;
   width: 100%;
   height: 100%;
+
   overflow: hidden;
+
   background:
     radial-gradient(
       circle,
       var(--grid-dot) 1px,
       transparent 1px
     );
+
   background-size: 24px 24px;
+
   cursor: grab;
 }
 
@@ -205,5 +311,9 @@ function handleWheel(event: WheelEvent) {
   min-width: 48px;
   text-align: center;
   font-size: 12px;
+}
+
+.arrow-head {
+  fill: var(--edge-color);
 }
 </style>

@@ -1,8 +1,13 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import {
+  onBeforeUnmount,
+  ref,
+  watch,
+} from 'vue'
 
 import CodeEditor from '@/components/editor/CodeEditor.vue'
 import DiagramCanvas from '@/components/canvas/DiagramCanvas.vue'
+import NodeInspector from '@/components/canvas/NodeInspector.vue'
 
 import { useEditorStore } from '@/stores/editor'
 
@@ -12,32 +17,109 @@ const editorWidth = ref(420)
 
 const isDragging = ref(false)
 
-function startResize(event: PointerEvent) {
+let parseTimer: ReturnType<
+  typeof setTimeout
+> | null = null
+
+watch(
+  () => store.source,
+  () => {
+    if (parseTimer) {
+      clearTimeout(parseTimer)
+    }
+
+    parseTimer = setTimeout(() => {
+      store.parse()
+    }, 250)
+  },
+)
+
+function startResize(
+  event: PointerEvent,
+) {
   isDragging.value = true
 
-  window.addEventListener('pointermove', resize)
-  window.addEventListener('pointerup', stopResize)
+  window.addEventListener(
+    'pointermove',
+    resize,
+  )
+
+  window.addEventListener(
+    'pointerup',
+    stopResize,
+  )
 
   event.preventDefault()
 }
 
-function resize(event: PointerEvent) {
+function resize(
+  event: PointerEvent,
+) {
   if (!isDragging.value) {
     return
   }
 
   editorWidth.value = Math.max(
     300,
-    Math.min(event.clientX, window.innerWidth - 400),
+    Math.min(
+      event.clientX,
+      window.innerWidth - 400,
+    ),
   )
 }
 
 function stopResize() {
   isDragging.value = false
 
-  window.removeEventListener('pointermove', resize)
-  window.removeEventListener('pointerup', stopResize)
+  window.removeEventListener(
+    'pointermove',
+    resize,
+  )
+
+  window.removeEventListener(
+    'pointerup',
+    stopResize,
+  )
 }
+
+function handleKeyboard(
+  event: KeyboardEvent,
+) {
+  const modifier =
+    event.metaKey || event.ctrlKey
+
+  if (modifier && event.key === 'Enter') {
+    event.preventDefault()
+
+    store.parse()
+  }
+
+  if (modifier && event.key === '0') {
+    event.preventDefault()
+
+    store.resetViewport()
+  }
+
+  if (event.key === 'Escape') {
+    store.selectNode(null)
+  }
+}
+
+window.addEventListener(
+  'keydown',
+  handleKeyboard,
+)
+
+onBeforeUnmount(() => {
+  window.removeEventListener(
+    'keydown',
+    handleKeyboard,
+  )
+
+  if (parseTimer) {
+    clearTimeout(parseTimer)
+  }
+})
 </script>
 
 <template>
@@ -66,7 +148,9 @@ function stopResize() {
     <section class="workspace">
       <aside
         class="code-panel"
-        :style="{ width: `${editorWidth}px` }"
+        :style="{
+          width: `${editorWidth}px`,
+        }"
       >
         <div class="panel-header">
           <span>Source</span>
@@ -102,9 +186,13 @@ function stopResize() {
             :key="`${error.line}-${error.message}`"
             class="error"
           >
-            <strong>Line {{ error.line }}</strong>
+            <strong>
+              Line {{ error.line }}
+            </strong>
 
-            <span>{{ error.message }}</span>
+            <span>
+              {{ error.message }}
+            </span>
           </div>
         </div>
       </aside>
@@ -116,6 +204,8 @@ function stopResize() {
 
       <section class="canvas-panel">
         <DiagramCanvas />
+
+        <NodeInspector />
       </section>
     </section>
   </main>

@@ -1,3 +1,5 @@
+export type DiagramDirection = "TD" | "LR";
+
 export interface DiagramNode {
   id: string;
   label: string;
@@ -14,6 +16,7 @@ export interface DiagramEdge {
 }
 
 export interface DiagramDocument {
+  direction: DiagramDirection;
   nodes: DiagramNode[];
   edges: DiagramEdge[];
 }
@@ -21,4 +24,9 @@ export interface DiagramDocument {
 export interface ParseError {
   line: number;
   message: string;
+}
+
+export interface ParseResult {
+  document: DiagramDocument;
+  errors: ParseError[];
 }

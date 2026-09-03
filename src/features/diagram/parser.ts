@@ -1,91 +1,134 @@
-import type { DiagramDocument, DiagramNode, DiagramEdge, ParseError } from "./types";
-
-export interface ParseResult {
-  document: DiagramDocument;
-  errors: ParseError[];
-}
+import type {
+  DiagramDirection,
+  DiagramDocument,
+  DiagramEdge,
+  DiagramNode,
+  ParseResult,
+} from "./types";
 
 const NODE_WIDTH = 140;
 const NODE_HEIGHT = 60;
+
 const HORIZONTAL_GAP = 100;
 const VERTICAL_GAP = 80;
 
 export function parseDiagram(source: string): ParseResult {
   const nodesMap = new Map<string, DiagramNode>();
   const edges: DiagramEdge[] = [];
-  const errors: ParseError[] = [];
+
+  const errors: ParseResult["errors"] = [];
 
   const lines = source.split("\n");
 
+  let direction: DiagramDirection = "TD";
+  let hasHeader = false;
+
   lines.forEach((rawLine, index) => {
+    const lineNumber = index + 1;
     const line = rawLine.trim();
 
     if (!line || line.startsWith("//")) {
       return;
     }
 
-    const match = line.match(/^(.+?)\s*->\s*(.+?)$/);
+    if (line.startsWith("flowchart")) {
+      const headerMatch = line.match(/^flowchart\s+(TD|LR)$/);
 
-    if (!match) {
+      if (!headerMatch) {
+        errors.push({
+          line: lineNumber,
+          message: "Expected: flowchart TD or flowchart LR",
+        });
+
+        return;
+      }
+
+      direction = headerMatch[1] as DiagramDirection;
+      hasHeader = true;
+
+      return;
+    }
+
+    if (!hasHeader) {
       errors.push({
-        line: index + 1,
+        line: lineNumber,
+        message: "Diagram must start with flowchart TD or flowchart LR",
+      });
+
+      return;
+    }
+
+    const edgeMatch = line.match(/^(.+?)\s*->\s*(.+?)$/);
+
+    if (!edgeMatch) {
+      errors.push({
+        line: lineNumber,
         message: "Expected format: A -> B",
       });
 
       return;
     }
 
-    const [, fromRaw, toRaw] = match;
+    const [, fromRaw, toRaw] = edgeMatch;
 
     const from = fromRaw.trim();
     const to = toRaw.trim();
 
     if (!from || !to) {
       errors.push({
-        line: index + 1,
+        line: lineNumber,
         message: "Node name cannot be empty",
       });
 
       return;
     }
 
+    const fromNode = createNode(from);
+    const toNode = createNode(to);
+
     if (!nodesMap.has(from)) {
-      nodesMap.set(from, {
-        id: createNodeId(from),
-        label: from,
-        x: 0,
-        y: 0,
-        width: NODE_WIDTH,
-        height: NODE_HEIGHT,
-      });
+      nodesMap.set(from, fromNode);
     }
 
     if (!nodesMap.has(to)) {
-      nodesMap.set(to, {
-        id: createNodeId(to),
-        label: to,
-        x: 0,
-        y: 0,
-        width: NODE_WIDTH,
-        height: NODE_HEIGHT,
-      });
+      nodesMap.set(to, toNode);
     }
 
-    edges.push({
-      id: `${createNodeId(from)}-${createNodeId(to)}`,
-      from: createNodeId(from),
-      to: createNodeId(to),
-    });
+    const edgeId = `${fromNode.id}-${toNode.id}`;
+
+    if (!edges.some((edge) => edge.id === edgeId)) {
+      edges.push({
+        id: edgeId,
+        from: fromNode.id,
+        to: toNode.id,
+      });
+    }
   });
 
-  const nodes = layoutNodes([...nodesMap.values()], edges);
+  const nodes = layoutNodes([...nodesMap.values()], edges, direction);
+
+  const document: DiagramDocument = {
+    direction,
+    nodes,
+    edges,
+  };
 
   return {
-    document: {
-      nodes,
-      edges,
-    },
+    document,
     errors,
+  };
+}
+
+function createNode(label: string): DiagramNode {
+  return {
+    id: createNodeId(label),
+    label,
+
+    x: 0,
+    y: 0,
+
+    width: NODE_WIDTH,
+    height: NODE_HEIGHT,
   };
 }
 
@@ -96,30 +139,46 @@ function createNodeId(value: string): string {
     .replace(/[^a-z0-9-_]+/g, "-");
 }
 
-function layoutNodes(nodes: DiagramNode[], edges: DiagramEdge[]): DiagramNode[] {
+function layoutNodes(
+  nodes: DiagramNode[],
+  edges: DiagramEdge[],
+  direction: DiagramDirection,
+): DiagramNode[] {
   const levels = calculateLevels(nodes, edges);
 
-  const levelGroups = new Map<number, DiagramNode[]>();
+  const groups = new Map<number, DiagramNode[]>();
 
   nodes.forEach((node) => {
     const level = levels.get(node.id) ?? 0;
 
-    if (!levelGroups.has(level)) {
-      levelGroups.set(level, []);
+    if (!groups.has(level)) {
+      groups.set(level, []);
     }
 
-    levelGroups.get(level)!.push(node);
+    groups.get(level)!.push(node);
   });
 
   const result: DiagramNode[] = [];
 
-  levelGroups.forEach((group, level) => {
+  groups.forEach((group, level) => {
     group.forEach((node, index) => {
-      result.push({
-        ...node,
-        x: index * (NODE_WIDTH + HORIZONTAL_GAP) + 100,
-        y: level * (NODE_HEIGHT + VERTICAL_GAP) + 100,
-      });
+      if (direction === "TD") {
+        result.push({
+          ...node,
+
+          x: index * (NODE_WIDTH + HORIZONTAL_GAP) + 100,
+
+          y: level * (NODE_HEIGHT + VERTICAL_GAP) + 100,
+        });
+      } else {
+        result.push({
+          ...node,
+
+          x: level * (NODE_WIDTH + HORIZONTAL_GAP) + 100,
+
+          y: index * (NODE_HEIGHT + VERTICAL_GAP) + 100,
+        });
+      }
     });
   });
 
@@ -142,10 +201,12 @@ function calculateLevels(nodes: DiagramNode[], edges: DiagramEdge[]): Map<string
 
     edges.forEach((edge) => {
       const fromLevel = levels.get(edge.from) ?? 0;
+
       const toLevel = levels.get(edge.to) ?? 0;
 
       if (toLevel <= fromLevel) {
         levels.set(edge.to, fromLevel + 1);
+
         changed = true;
       }
     });

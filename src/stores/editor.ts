@@ -1,20 +1,25 @@
 import { computed, ref } from "vue";
+
 import { defineStore } from "pinia";
 
 import { parseDiagram } from "@/features/diagram/parser";
+
 import type { DiagramDocument, ParseError } from "@/features/diagram/types";
 
-const DEFAULT_SOURCE = `// DevCanvas
+const DEFAULT_SOURCE = `// DevCanvas example
+
+flowchart TD
 
 Browser -> API
 API -> Database
-API -> Cache
+API -> Redis
 `;
 
 export const useEditorStore = defineStore("editor", () => {
   const source = ref(DEFAULT_SOURCE);
 
   const document = ref<DiagramDocument>({
+    direction: "TD",
     nodes: [],
     edges: [],
   });
@@ -32,32 +37,52 @@ export const useEditorStore = defineStore("editor", () => {
 
   const hasErrors = computed(() => errors.value.length > 0);
 
+  const selectedNode = computed(() => {
+    if (!selectedNodeId.value) {
+      return null;
+    }
+
+    return document.value.nodes.find((node) => node.id === selectedNodeId.value) ?? null;
+  });
+
   function parse() {
     const result = parseDiagram(source.value);
 
     document.value = result.document;
+
     errors.value = result.errors;
+
+    if (
+      selectedNodeId.value &&
+      !result.document.nodes.some((node) => node.id === selectedNodeId.value)
+    ) {
+      selectedNodeId.value = null;
+    }
   }
 
   function setSource(value: string) {
     source.value = value;
-    parse();
   }
 
   function selectNode(nodeId: string | null) {
     selectedNodeId.value = nodeId;
   }
 
+  function setZoom(value: number) {
+    zoom.value = Math.min(Math.max(value, 0.2), 3);
+  }
+
   function zoomIn() {
-    zoom.value = Math.min(zoom.value + 0.1, 3);
+    setZoom(Number((zoom.value + 0.1).toFixed(2)));
   }
 
   function zoomOut() {
-    zoom.value = Math.max(zoom.value - 0.1, 0.25);
+    setZoom(Number((zoom.value - 0.1).toFixed(2)));
   }
 
-  function resetZoom() {
+  function resetViewport() {
     zoom.value = 1;
+
     offset.value = {
       x: 0,
       y: 0,
@@ -71,6 +96,56 @@ export const useEditorStore = defineStore("editor", () => {
     };
   }
 
+  function updateViewport(
+    nextZoom: number,
+    nextOffset: {
+      x: number;
+      y: number;
+    },
+  ) {
+    zoom.value = nextZoom;
+
+    offset.value = nextOffset;
+  }
+
+  function fitToScreen(viewportWidth: number, viewportHeight: number) {
+    const nodes = document.value.nodes;
+
+    if (!nodes.length) {
+      resetViewport();
+      return;
+    }
+
+    const minX = Math.min(...nodes.map((node) => node.x));
+    const minY = Math.min(...nodes.map((node) => node.y));
+
+    const maxX = Math.max(...nodes.map((node) => node.x + node.width));
+    const maxY = Math.max(...nodes.map((node) => node.y + node.height));
+
+    const width = maxX - minX;
+    const height = maxY - minY;
+
+    const padding = 100;
+
+    const scaleX = (viewportWidth - padding) / width;
+    const scaleY = (viewportHeight - padding) / height;
+
+    const nextZoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.2), 2);
+
+    const centerX = viewportWidth / 2;
+    const centerY = viewportHeight / 2;
+
+    const diagramCenterX = minX + width / 2;
+    const diagramCenterY = minY + height / 2;
+
+    const nextOffset = {
+      x: centerX - diagramCenterX * nextZoom,
+      y: centerY - diagramCenterY * nextZoom,
+    };
+
+    updateViewport(nextZoom, nextOffset);
+  }
+
   parse();
 
   return {
@@ -80,13 +155,20 @@ export const useEditorStore = defineStore("editor", () => {
     zoom,
     offset,
     selectedNodeId,
+    selectedNode,
     hasErrors,
+
     parse,
     setSource,
     selectNode,
+
+    setZoom,
     zoomIn,
     zoomOut,
-    resetZoom,
+
+    resetViewport,
     setOffset,
+    updateViewport,
+    fitToScreen,
   };
 });
