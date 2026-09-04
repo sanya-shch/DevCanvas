@@ -1,3 +1,4 @@
+```vue
 <script setup lang="ts">
 import {
   computed,
@@ -20,11 +21,32 @@ const canvasRef =
 const viewportRef =
   ref<HTMLElement | null>(null)
 
-const isDraggingNode =
-  ref(false)
 
-const draggingNodeId =
-  ref<string | null>(null)
+// const DRAG_THRESHOLD = 4
+
+// const isDraggingNode = ref(false)
+// const draggingNodeId = ref<string | null>(null)
+// const didDragNode = ref(false)
+
+// const dragStart = ref({
+//   x: 0,
+//   y: 0,
+// })
+
+// const nodeStart = ref({
+//   x: 0,
+//   y: 0,
+// })
+
+// let activePointerId: number | null = null
+
+// -----------------------------------------------------------------------------
+// Node dragging
+// -----------------------------------------------------------------------------
+
+const isDraggingNode = ref(false)
+
+const draggingNodeId = ref<string | null>(null)
 
 const dragStart = ref({
   x: 0,
@@ -36,9 +58,32 @@ const nodeStart = ref({
   y: 0,
 })
 
+/**
+ * Pointer movement below this threshold
+ * is treated as a click rather than a drag.
+ */
+const DRAG_THRESHOLD = 4
+
+const didDragNode = ref(false)
+
+/**
+ * Pointer capture causes the click event to
+ * potentially arrive at the SVG instead of
+ * the original node.
+ *
+ * We suppress only the click generated after
+ * an actual drag, never after a simple click.
+ */
+const suppressNextCanvasClick =
+  ref(false)
+
 let activePointerId:
   | number
   | null = null
+
+// -----------------------------------------------------------------------------
+// Canvas panning
+// -----------------------------------------------------------------------------
 
 const isPanning =
   ref(false)
@@ -53,6 +98,10 @@ const panStartOffset = ref({
   y: 0,
 })
 
+// -----------------------------------------------------------------------------
+// Computed
+// -----------------------------------------------------------------------------
+
 const transform = computed(() => {
   return `
     translate(${store.offset.x} ${store.offset.y})
@@ -60,25 +109,90 @@ const transform = computed(() => {
   `
 })
 
-function moveNode(
+// -----------------------------------------------------------------------------
+// Node dragging
+// -----------------------------------------------------------------------------
+
+function startNodeDrag(
   event: PointerEvent,
+  nodeId: string,
 ) {
+  if (event.button !== 0) {
+    return
+  }
+
+  const layout = store.document.layout[nodeId]
+
+  if (!layout) {
+    return
+  }
+
+  event.stopPropagation()
+
+  store.selectNode(nodeId)
+
+  draggingNodeId.value = nodeId
+  didDragNode.value = false
+  activePointerId = event.pointerId
+
+  dragStart.value = {
+    x: event.clientX,
+    y: event.clientY,
+  }
+
+  nodeStart.value = {
+    x: layout.x,
+    y: layout.y,
+  }
+}
+
+function moveNode(event: PointerEvent) {
+  if (!draggingNodeId.value) {
+    return
+  }
+
   if (
-    !isDraggingNode.value ||
-    !draggingNodeId.value
+    activePointerId !== null &&
+    event.pointerId !== activePointerId
   ) {
     return
   }
 
+  const rawDx =
+    event.clientX - dragStart.value.x
+
+  const rawDy =
+    event.clientY - dragStart.value.y
+
+  if (!didDragNode.value) {
+    const distance = Math.hypot(
+      rawDx,
+      rawDy,
+    )
+
+    if (distance < DRAG_THRESHOLD) {
+      return
+    }
+
+    didDragNode.value = true
+    isDraggingNode.value = true
+
+    store.beginHistoryTransaction()
+
+    try {
+      canvasRef.value?.setPointerCapture(
+        event.pointerId,
+      )
+    } catch {
+      // Pointer capture may not be available.
+    }
+  }
+
   const dx =
-    (event.clientX -
-      dragStart.value.x) /
-    store.zoom
+    rawDx / store.zoom
 
   const dy =
-    (event.clientY -
-      dragStart.value.y) /
-    store.zoom
+    rawDy / store.zoom
 
   store.updateNodePosition(
     draggingNodeId.value,
@@ -93,8 +207,7 @@ function stopNodeDrag(
   if (
     event &&
     activePointerId !== null &&
-    event.pointerId !==
-      activePointerId
+    event.pointerId !== activePointerId
   ) {
     return
   }
@@ -114,15 +227,62 @@ function stopNodeDrag(
     }
   }
 
+  if (didDragNode.value) {
+    store.endHistoryTransaction()
+
+    // The click generated after a drag
+    // should not deselect the node.
+    suppressNextCanvasClick.value = true
+  }
+
   isDraggingNode.value = false
   draggingNodeId.value = null
+  didDragNode.value = false
   activePointerId = null
 }
+
+// -----------------------------------------------------------------------------
+// Canvas click
+// -----------------------------------------------------------------------------
+
+function handleCanvasClick(
+  event: MouseEvent,
+) {
+  /**
+   * Pointer capture can make the click event
+   * target the SVG after a drag.
+   *
+   * Consume that click without deselecting
+   * the node.
+   */
+  if (suppressNextCanvasClick.value) {
+    suppressNextCanvasClick.value = false
+    return
+  }
+
+  /**
+   * Clicking the empty canvas deselects the node.
+   */
+  if (
+    event.target ===
+    event.currentTarget
+  ) {
+    store.selectNode(null)
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Canvas panning
+// -----------------------------------------------------------------------------
 
 function startPan(
   event: PointerEvent,
 ) {
   if (event.button !== 0) {
+    return
+  }
+
+  if (draggingNodeId.value) {
     return
   }
 
@@ -188,8 +348,7 @@ function stopPan(
   if (
     event &&
     activePointerId !== null &&
-    event.pointerId !==
-      activePointerId
+    event.pointerId !== activePointerId
   ) {
     return
   }
@@ -213,10 +372,14 @@ function stopPan(
   activePointerId = null
 }
 
+// -----------------------------------------------------------------------------
+// Pointer events
+// -----------------------------------------------------------------------------
+
 function handlePointerMove(
   event: PointerEvent,
 ) {
-  if (isDraggingNode.value) {
+  if (draggingNodeId.value) {
     moveNode(event)
     return
   }
@@ -229,7 +392,7 @@ function handlePointerMove(
 function handlePointerUp(
   event: PointerEvent,
 ) {
-  if (isDraggingNode.value) {
+  if (draggingNodeId.value) {
     stopNodeDrag(event)
     return
   }
@@ -242,7 +405,7 @@ function handlePointerUp(
 function handlePointerCancel(
   event: PointerEvent,
 ) {
-  if (isDraggingNode.value) {
+  if (draggingNodeId.value) {
     stopNodeDrag(event)
     return
   }
@@ -252,98 +415,9 @@ function handlePointerCancel(
   }
 }
 
-function startNodeDrag(
-  event: PointerEvent,
-  nodeId: string,
-) {
-  if (event.button !== 0) {
-    return
-  }
-
-  const layout =
-    store.document.layout[nodeId]
-
-  if (!layout) {
-    return
-  }
-
-  event.preventDefault()
-  event.stopPropagation()
-
-  isDraggingNode.value = true
-  draggingNodeId.value = nodeId
-
-  activePointerId =
-    event.pointerId
-
-  dragStart.value = {
-    x: event.clientX,
-    y: event.clientY,
-  }
-
-  nodeStart.value = {
-    x: layout.x,
-    y: layout.y,
-  }
-
-  store.selectNode(nodeId)
-
-  try {
-    canvasRef.value?.setPointerCapture(
-      event.pointerId,
-    )
-  } catch {
-    // Pointer capture is not critical.
-  }
-}
-
-function handleNodePointerDown(
-  event: PointerEvent,
-  nodeId: string,
-) {
-  if (event.button !== 0) {
-    return
-  }
-
-  store.selectNode(nodeId)
-
-  isDraggingNode.value = true
-  draggingNodeId.value = nodeId
-  activePointerId = event.pointerId
-
-  dragStart.value = {
-    x: event.clientX,
-    y: event.clientY,
-  }
-
-  const layout = store.document.layout[nodeId]
-
-  if (!layout) {
-    return
-  }
-
-  nodeStart.value = {
-    x: layout.x,
-    y: layout.y,
-  }
-
-  const target = event.currentTarget
-
-  if (target instanceof Element) {
-    target.setPointerCapture(event.pointerId)
-  }
-}
-
-function handleCanvasClick(
-  event: MouseEvent,
-) {
-  if (
-    event.target ===
-    event.currentTarget
-  ) {
-    store.selectNode(null)
-  }
-}
+// -----------------------------------------------------------------------------
+// Zoom
+// -----------------------------------------------------------------------------
 
 function zoomAtPoint(
   newZoom: number,
@@ -388,7 +462,6 @@ function zoomAtPoint(
   store.setOffset(
     mouseX -
       worldX * actualZoom,
-
     mouseY -
       worldY * actualZoom,
   )
@@ -430,6 +503,10 @@ async function fitToScreen() {
   )
 }
 
+// -----------------------------------------------------------------------------
+// Keyboard
+// -----------------------------------------------------------------------------
+
 function handleKeyDown(
   event: KeyboardEvent,
 ) {
@@ -464,6 +541,10 @@ function handleKeyDown(
     store.selectNode(null)
   }
 }
+
+// -----------------------------------------------------------------------------
+// Lifecycle
+// -----------------------------------------------------------------------------
 
 onMounted(() => {
   window.addEventListener(
@@ -590,12 +671,9 @@ onBeforeUnmount(() => {
           :key="node.id"
           :node="node"
           :layout="store.document.layout[node.id]"
-          :selected="
-            store.selectedNodeId === node.id
-          "
+          :selected="store.selectedNodeId === node.id"
           @select="store.selectNode"
           @drag-start="startNodeDrag"
-          @pointerdown.stop="handleNodePointerDown($event, node.id)"
         />
       </g>
     </svg>

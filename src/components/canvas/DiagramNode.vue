@@ -77,20 +77,16 @@ function handlePointerDown(
   )
 }
 
-async function startEditing(
-  event: MouseEvent,
-) {
-  event.preventDefault()
+async function startEditing(event: MouseEvent) {
   event.stopPropagation()
 
-  emit(
-    'select',
-    props.node.id,
-  )
+  if (isEditing.value) {
+    return
+  }
 
-  draftLabel.value =
-    props.node.label
+  emit('select', props.node.id)
 
+  draftLabel.value = props.node.label
   isEditing.value = true
 
   await nextTick()
@@ -114,17 +110,19 @@ function commitEditing() {
     return
   }
 
-  if (
-    nextLabel !==
-    props.node.label
-  ) {
-    store.updateNodeLabel(
-      props.node.id,
-      nextLabel,
-    )
-  }
+  const changed =
+    nextLabel !== props.node.label
 
   isEditing.value = false
+
+  if (!changed) {
+    return
+  }
+
+  store.updateNodeLabel(
+    props.node.id,
+    nextLabel,
+  )
 }
 
 function handleInputKeyDown(
@@ -132,6 +130,7 @@ function handleInputKeyDown(
 ) {
   if (event.key === 'Enter') {
     event.preventDefault()
+    event.stopPropagation()
 
     commitEditing()
 
@@ -140,6 +139,7 @@ function handleInputKeyDown(
 
   if (event.key === 'Escape') {
     event.preventDefault()
+    event.stopPropagation()
 
     cancelEditing()
   }
@@ -216,6 +216,7 @@ function handleInputKeyDown(
         type="text"
         autocomplete="off"
         @pointerdown.stop
+        @dblclick.stop
         @keydown="handleInputKeyDown"
         @blur="commitEditing"
       />

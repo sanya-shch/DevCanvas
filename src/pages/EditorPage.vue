@@ -59,54 +59,112 @@ onMounted(async () => {
   })
 })
 
-function handleKeyDown(event: KeyboardEvent) {
-  const target = event.target as HTMLElement | null
+function handleKeyDown(
+  event: KeyboardEvent,
+) {
+  const target =
+    event.target as HTMLElement | null;
 
   const isEditable =
     target?.tagName === 'INPUT' ||
     target?.tagName === 'TEXTAREA' ||
-    target?.isContentEditable
+    target?.isContentEditable;
 
   /*
-   * Do not intercept shortcuts while typing in
-   * Monaco, inputs or textareas.
+   * Let Monaco and inputs handle their own
+   * keyboard shortcuts.
    */
   if (isEditable) {
-    return
+    return;
   }
 
   const modifier =
-    event.metaKey || event.ctrlKey
+    event.metaKey ||
+    event.ctrlKey;
 
-  if (
-    modifier &&
-    event.key === 'Enter'
-  ) {
-    event.preventDefault()
-
-    if (parseTimeout !== null) {
-      clearTimeout(parseTimeout)
-      parseTimeout = null
+  if (!modifier) {
+    if (event.key === 'Escape') {
+      store.selectNode(null);
     }
 
-    store.parse()
-
-    return
+    return;
   }
 
+  const key =
+    event.key.toLowerCase();
+
+  /*
+   * Undo
+   *
+   * Cmd/Ctrl + Z
+   */
   if (
-    modifier &&
-    event.key === '0'
+    key === 'z' &&
+    !event.shiftKey
   ) {
-    event.preventDefault()
+    event.preventDefault();
 
-    store.resetViewport()
+    store.undo();
 
-    return
+    return;
   }
 
-  if (event.key === 'Escape') {
-    store.selectNode(null)
+  /*
+   * Redo
+   *
+   * Cmd/Ctrl + Shift + Z
+   */
+  if (
+    key === 'z' &&
+    event.shiftKey
+  ) {
+    event.preventDefault();
+
+    store.redo();
+
+    return;
+  }
+
+  /*
+   * Redo
+   *
+   * Cmd/Ctrl + Y
+   */
+  if (key === 'y') {
+    event.preventDefault();
+
+    store.redo();
+
+    return;
+  }
+
+  /*
+   * Parse
+   *
+   * Cmd/Ctrl + Enter
+   */
+  if (key === 'enter') {
+    event.preventDefault();
+
+    if (parseTimeout !== null) {
+      clearTimeout(parseTimeout);
+      parseTimeout = null;
+    }
+
+    store.parse();
+
+    return;
+  }
+
+  /*
+   * Reset viewport
+   *
+   * Cmd/Ctrl + 0
+   */
+  if (key === '0') {
+    event.preventDefault();
+
+    store.resetViewport();
   }
 }
 
@@ -150,6 +208,26 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="editor-actions">
+        <button
+          type="button"
+          class="header-button"
+          :disabled="!store.canUndo"
+          title="Undo (Cmd/Ctrl + Z)"
+          @click="store.undo"
+        >
+          Undo
+        </button>
+
+        <button
+          type="button"
+          class="header-button"
+          :disabled="!store.canRedo"
+          title="Redo (Cmd/Ctrl + Shift + Z)"
+          @click="store.redo"
+        >
+          Redo
+        </button>
+
         <button
           type="button"
           class="header-button"
@@ -516,6 +594,11 @@ onBeforeUnmount(() => {
 
 .footer-separator {
   opacity: 0.5;
+}
+
+.header-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 @media (max-width: 1100px) {

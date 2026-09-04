@@ -4,6 +4,7 @@ import { defineStore } from "pinia";
 import { parseDiagram } from "@/features/diagram/parser";
 import { serializeDiagram } from "@/features/diagram/serializer";
 import { calculateNodeSize } from "@/features/diagram/nodeSizing";
+import { History } from "@/features/diagram/history";
 
 import type { DiagramDocument, ParseError } from "@/features/diagram/types";
 
@@ -18,6 +19,8 @@ const INITIAL_ZOOM = 1;
 
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 2;
+
+const HISTORY_LIMIT = 100;
 
 export const useEditorStore = defineStore("editor", () => {
   // ---------------------------------------------------------------------------
@@ -62,6 +65,64 @@ export const useEditorStore = defineStore("editor", () => {
   });
 
   const hasErrors = computed(() => errors.value.length > 0);
+
+  // ---------------------------------------------------------------------------
+  // History
+  // ---------------------------------------------------------------------------
+
+  const history = new History<DiagramDocument>(HISTORY_LIMIT);
+
+  function cloneDocument(value: DiagramDocument): DiagramDocument {
+    return JSON.parse(JSON.stringify(value)) as DiagramDocument;
+  }
+
+  function documentsEqual(first: DiagramDocument, second: DiagramDocument): boolean {
+    return JSON.stringify(first) === JSON.stringify(second);
+  }
+
+  function commitDocument(mutate: () => void) {
+    const previousDocument = cloneDocument(document.value);
+
+    mutate();
+
+    if (documentsEqual(previousDocument, document.value)) {
+      return;
+    }
+
+    history.push(previousDocument);
+    notifyHistoryChange();
+
+    updateSourceFromDocument();
+  }
+
+  let historyTransaction: DiagramDocument | null = null;
+
+  function beginHistoryTransaction() {
+    if (historyTransaction !== null) {
+      return;
+    }
+
+    historyTransaction = cloneDocument(document.value);
+  }
+
+  function endHistoryTransaction() {
+    if (historyTransaction === null) {
+      return;
+    }
+
+    const previousDocument = historyTransaction;
+
+    historyTransaction = null;
+
+    if (documentsEqual(previousDocument, document.value)) {
+      return;
+    }
+
+    history.push(previousDocument);
+    notifyHistoryChange();
+
+    updateSourceFromDocument();
+  }
 
   // ---------------------------------------------------------------------------
   // Parsing
@@ -233,37 +294,32 @@ export const useEditorStore = defineStore("editor", () => {
   // ---------------------------------------------------------------------------
 
   function updateNodeLabel(nodeId: string, label: string) {
-    const node = document.value.nodes.find((item) => item.id === nodeId);
-
-    if (!node) {
-      return;
-    }
-
     const nextLabel = label.trim();
 
     if (!nextLabel) {
       return;
     }
 
-    node.label = nextLabel;
+    const node = document.value.nodes.find((item) => item.id === nodeId);
 
-    /*
-     * Label changes automatically change
-     * the node dimensions.
-     *
-     * Position remains untouched.
-     */
-    const layout = document.value.layout[nodeId];
+    if (!node || node.label === nextLabel) {
+      return;
+    }
 
-    if (layout) {
+    commitDocument(() => {
+      node.label = nextLabel;
+
+      const layout = document.value.layout[nodeId];
+
+      if (!layout) {
+        return;
+      }
+
       const size = calculateNodeSize(nextLabel);
 
       layout.width = size.width;
-
       layout.height = size.height;
-    }
-
-    updateSourceFromDocument();
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -271,30 +327,100 @@ export const useEditorStore = defineStore("editor", () => {
   // ---------------------------------------------------------------------------
 
   function deleteNode(nodeId: string) {
-    document.value.nodes = document.value.nodes.filter((node) => node.id !== nodeId);
+    const nodeExists = document.value.nodes.some((node) => node.id === nodeId);
 
-    document.value.edges = document.value.edges.filter(
-      (edge) => edge.from !== nodeId && edge.to !== nodeId,
-    );
-
-    delete document.value.layout[nodeId];
-
-    /*
-     * Remove the source identifier
-     * from sourceMap.
-     */
-    for (const [sourceId, internalId] of Object.entries(document.value.sourceMap)) {
-      if (internalId === nodeId) {
-        delete document.value.sourceMap[sourceId];
-      }
+    if (!nodeExists) {
+      return;
     }
 
-    if (selectedNodeId.value === nodeId) {
+    commitDocument(() => {
+      document.value.nodes = document.value.nodes.filter((node) => node.id !== nodeId);
+
+      document.value.edges = document.value.edges.filter(
+        (edge) => edge.from !== nodeId && edge.to !== nodeId,
+      );
+
+      delete document.value.layout[nodeId];
+
+      for (const [sourceId, internalId] of Object.entries(document.value.sourceMap)) {
+        if (internalId === nodeId) {
+          delete document.value.sourceMap[sourceId];
+        }
+      }
+
+      if (selectedNodeId.value === nodeId) {
+        selectedNodeId.value = null;
+      }
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Undo / Redo
+  // ---------------------------------------------------------------------------
+
+  function undo() {
+    const currentDocument = cloneDocument(document.value);
+    const previousDocument = history.undo(currentDocument);
+
+    if (!previousDocument) {
+      return;
+    }
+
+    document.value = previousDocument;
+
+    updateSourceFromDocument();
+    notifyHistoryChange();
+
+    if (
+      selectedNodeId.value &&
+      !document.value.nodes.some((node) => node.id === selectedNodeId.value)
+    ) {
       selectedNodeId.value = null;
     }
 
-    updateSourceFromDocument();
+    errors.value = [];
   }
+
+  function redo() {
+    const currentDocument = cloneDocument(document.value);
+    const nextDocument = history.redo(currentDocument);
+
+    if (!nextDocument) {
+      return;
+    }
+
+    document.value = nextDocument;
+
+    updateSourceFromDocument();
+    notifyHistoryChange();
+
+    if (
+      selectedNodeId.value &&
+      !document.value.nodes.some((node) => node.id === selectedNodeId.value)
+    ) {
+      selectedNodeId.value = null;
+    }
+
+    errors.value = [];
+  }
+
+  const historyVersion = ref(0);
+
+  function notifyHistoryChange() {
+    historyVersion.value += 1;
+  }
+
+  const canUndo = computed(() => {
+    historyVersion.value;
+
+    return history.canUndo;
+  });
+
+  const canRedo = computed(() => {
+    historyVersion.value;
+
+    return history.canRedo;
+  });
 
   return {
     // document
@@ -340,5 +466,13 @@ export const useEditorStore = defineStore("editor", () => {
 
     // node management
     deleteNode,
+
+    // history
+    canUndo,
+    canRedo,
+    undo,
+    redo,
+    beginHistoryTransaction,
+    endHistoryTransaction,
   };
 });
