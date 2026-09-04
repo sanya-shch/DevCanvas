@@ -1,6 +1,9 @@
 import { createRouter, createWebHistory } from "vue-router";
 
+import AppShell from "@/components/layout/AppShell.vue";
+import HomePage from "@/pages/HomePage.vue";
 import EditorPage from "@/pages/EditorPage.vue";
+import TutorialsPage from "@/pages/TutorialsPage.vue";
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -8,9 +11,18 @@ export const router = createRouter({
   routes: [
     {
       path: "/",
-      redirect: "/editor",
+      component: AppShell,
+      children: [
+        {
+          path: "",
+          component: HomePage,
+        },
+        {
+          path: "tutorials",
+          component: TutorialsPage,
+        },
+      ],
     },
-
     {
       path: "/editor",
       component: EditorPage,

@@ -191,21 +191,18 @@ onBeforeUnmount(() => {
 <template>
   <main class="editor-page">
     <header class="editor-header">
-      <div class="editor-title">
-        <div class="logo">
-          D
-        </div>
+      <RouterLink
+        to="/"
+        class="brand"
+      >
+        <span class="brand-mark">
+          ◆
+        </span>
 
-        <div>
-          <h1>
-            DevCanvas
-          </h1>
-
-          <span>
-            Diagram Editor
-          </span>
-        </div>
-      </div>
+        <span class="brand-name">
+          DevCanvas
+        </span>
+      </RouterLink>
 
       <div class="editor-actions">
         <button
@@ -375,45 +372,35 @@ onBeforeUnmount(() => {
   background: var(--panel-background);
 }
 
-.editor-title {
-  display: flex;
+.brand {
+  display: inline-flex;
   align-items: center;
-
   gap: 10px;
+
+  color: var(--text-primary);
+  text-decoration: none;
 }
 
-.logo {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.brand-mark {
+  display: grid;
+  place-items: center;
 
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
 
   border-radius: 7px;
 
   background: var(--accent-color);
-  color: var(--accent-contrast-color);
+  color: white;
 
   font-size: 14px;
   font-weight: 700;
 }
 
-.editor-title h1 {
-  margin: 0;
-
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.editor-title span {
-  display: block;
-
-  margin-top: 1px;
-
-  color: var(--text-secondary);
-
-  font-size: 10px;
+.brand-name {
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
 }
 
 .editor-actions {

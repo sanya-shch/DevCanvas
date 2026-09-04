@@ -10,9 +10,9 @@ import type { DiagramDocument, ParseError } from "@/features/diagram/types";
 
 const INITIAL_SOURCE = `flowchart LR
 
-Browser["Web Browser"] -- "HTTP request" -> API["REST API"]
-API -- "SQL query" -> Database["PostgreSQL"]
-API -- "cache lookup" -> Redis["Redis Cache"]
+Browser[Web Browser] -- HTTP request -> API[REST API]
+API -- "SQL query" -> Database(PostgreSQL)
+API -- 'cache lookup' -> Redis{Redis Cache}
 `;
 
 const INITIAL_ZOOM = 1;
