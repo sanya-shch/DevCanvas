@@ -21,24 +21,26 @@ const canvasRef =
 const viewportRef =
   ref<HTMLElement | null>(null)
 
+function releasePointerCapture(event: PointerEvent) {
+  const element = canvasRef.value;
 
-// const DRAG_THRESHOLD = 4
+  if (!element) return;
 
-// const isDraggingNode = ref(false)
-// const draggingNodeId = ref<string | null>(null)
-// const didDragNode = ref(false)
+  if (
+    typeof element.hasPointerCapture !== "function" ||
+    typeof element.releasePointerCapture !== "function"
+  ) {
+    return;
+  }
 
-// const dragStart = ref({
-//   x: 0,
-//   y: 0,
-// })
+  if (!element.hasPointerCapture(event.pointerId)) {
+    return;
+  }
 
-// const nodeStart = ref({
-//   x: 0,
-//   y: 0,
-// })
-
-// let activePointerId: number | null = null
+  try {
+    element.releasePointerCapture(event.pointerId);
+  } catch {}
+}
 
 // -----------------------------------------------------------------------------
 // Node dragging
@@ -201,44 +203,28 @@ function moveNode(event: PointerEvent) {
   )
 }
 
-function stopNodeDrag(
-  event?: PointerEvent,
-) {
+function stopNodeDrag(event?: PointerEvent) {
   if (
     event &&
     activePointerId !== null &&
     event.pointerId !== activePointerId
   ) {
-    return
+    return;
   }
 
-  if (
-    event &&
-    canvasRef.value?.hasPointerCapture(
-      event.pointerId,
-    )
-  ) {
-    try {
-      canvasRef.value.releasePointerCapture(
-        event.pointerId,
-      )
-    } catch {
-      // Pointer capture may already be released.
-    }
+  if (event) {
+    releasePointerCapture(event);
   }
 
   if (didDragNode.value) {
-    store.endHistoryTransaction()
-
-    // The click generated after a drag
-    // should not deselect the node.
-    suppressNextCanvasClick.value = true
+    store.endHistoryTransaction();
+    suppressNextCanvasClick.value = true;
   }
 
-  isDraggingNode.value = false
-  draggingNodeId.value = null
-  didDragNode.value = false
-  activePointerId = null
+  isDraggingNode.value = false;
+  draggingNodeId.value = null;
+  didDragNode.value = false;
+  activePointerId = null;
 }
 
 // -----------------------------------------------------------------------------
@@ -342,34 +328,21 @@ function movePan(
   )
 }
 
-function stopPan(
-  event?: PointerEvent,
-) {
+function stopPan(event?: PointerEvent) {
   if (
     event &&
     activePointerId !== null &&
     event.pointerId !== activePointerId
   ) {
-    return
+    return;
   }
 
-  if (
-    event &&
-    canvasRef.value?.hasPointerCapture(
-      event.pointerId,
-    )
-  ) {
-    try {
-      canvasRef.value.releasePointerCapture(
-        event.pointerId,
-      )
-    } catch {
-      // Pointer capture may already be released.
-    }
+  if (event) {
+    releasePointerCapture(event);
   }
 
-  isPanning.value = false
-  activePointerId = null
+  isPanning.value = false;
+  activePointerId = null;
 }
 
 // -----------------------------------------------------------------------------

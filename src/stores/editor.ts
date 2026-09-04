@@ -120,8 +120,6 @@ export const useEditorStore = defineStore("editor", () => {
 
     history.push(previousDocument);
     notifyHistoryChange();
-
-    updateSourceFromDocument();
   }
 
   // ---------------------------------------------------------------------------
