@@ -1,41 +1,57 @@
 import { computed, ref } from "vue";
-
 import { defineStore } from "pinia";
 
 import { parseDiagram } from "@/features/diagram/parser";
+import { serializeDiagram } from "@/features/diagram/serializer";
+import { calculateNodeSize } from "@/features/diagram/nodeSizing";
 
 import type { DiagramDocument, ParseError } from "@/features/diagram/types";
 
-const DEFAULT_SOURCE = `// DevCanvas example
+const INITIAL_SOURCE = `flowchart LR
 
-flowchart TD
-
-Browser -> API
-API -> Database
-API -> Redis
+Browser["Web Browser"] -- "HTTP request" -> API["REST API"]
+API -- "SQL query" -> Database["PostgreSQL"]
+API -- "cache lookup" -> Redis["Redis Cache"]
 `;
 
+const INITIAL_ZOOM = 1;
+
+const MIN_ZOOM = 0.25;
+const MAX_ZOOM = 2;
+
 export const useEditorStore = defineStore("editor", () => {
-  const source = ref(DEFAULT_SOURCE);
+  // ---------------------------------------------------------------------------
+  // Document
+  // ---------------------------------------------------------------------------
+
+  const source = ref(INITIAL_SOURCE);
 
   const document = ref<DiagramDocument>({
-    direction: "TD",
+    direction: "LR",
     nodes: [],
     edges: [],
+    layout: {},
+    sourceMap: {},
   });
 
   const errors = ref<ParseError[]>([]);
 
-  const zoom = ref(1);
+  // ---------------------------------------------------------------------------
+  // Viewport
+  // ---------------------------------------------------------------------------
+
+  const zoom = ref(INITIAL_ZOOM);
 
   const offset = ref({
     x: 0,
     y: 0,
   });
 
-  const selectedNodeId = ref<string | null>(null);
+  // ---------------------------------------------------------------------------
+  // Selection
+  // ---------------------------------------------------------------------------
 
-  const hasErrors = computed(() => errors.value.length > 0);
+  const selectedNodeId = ref<string | null>(null);
 
   const selectedNode = computed(() => {
     if (!selectedNodeId.value) {
@@ -45,12 +61,31 @@ export const useEditorStore = defineStore("editor", () => {
     return document.value.nodes.find((node) => node.id === selectedNodeId.value) ?? null;
   });
 
+  const hasErrors = computed(() => errors.value.length > 0);
+
+  // ---------------------------------------------------------------------------
+  // Parsing
+  // ---------------------------------------------------------------------------
+
   function parse() {
-    const result = parseDiagram(source.value);
+    const result = parseDiagram(source.value, document.value);
+
+    /*
+     * Do not replace the visual document with
+     * a partially parsed invalid document.
+     *
+     * This makes typing in Monaco much nicer:
+     * the canvas keeps the last valid state.
+     */
+    if (result.errors.length > 0) {
+      errors.value = result.errors;
+
+      return;
+    }
 
     document.value = result.document;
 
-    errors.value = result.errors;
+    errors.value = [];
 
     if (
       selectedNodeId.value &&
@@ -64,24 +99,36 @@ export const useEditorStore = defineStore("editor", () => {
     source.value = value;
   }
 
+  // ---------------------------------------------------------------------------
+  // Selection
+  // ---------------------------------------------------------------------------
+
   function selectNode(nodeId: string | null) {
     selectedNodeId.value = nodeId;
   }
 
+  // ---------------------------------------------------------------------------
+  // Zoom
+  // ---------------------------------------------------------------------------
+
   function setZoom(value: number) {
-    zoom.value = Math.min(Math.max(value, 0.2), 3);
+    zoom.value = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
   }
 
   function zoomIn() {
-    setZoom(Number((zoom.value + 0.1).toFixed(2)));
+    setZoom(zoom.value + 0.1);
   }
 
   function zoomOut() {
-    setZoom(Number((zoom.value - 0.1).toFixed(2)));
+    setZoom(zoom.value - 0.1);
   }
 
+  // ---------------------------------------------------------------------------
+  // Viewport
+  // ---------------------------------------------------------------------------
+
   function resetViewport() {
-    zoom.value = 1;
+    zoom.value = INITIAL_ZOOM;
 
     offset.value = {
       x: 0,
@@ -96,19 +143,14 @@ export const useEditorStore = defineStore("editor", () => {
     };
   }
 
-  function updateViewport(
-    nextZoom: number,
-    nextOffset: {
-      x: number;
-      y: number;
-    },
-  ) {
-    zoom.value = nextZoom;
-
-    offset.value = nextOffset;
+  function updateViewport(deltaX: number, deltaY: number) {
+    offset.value = {
+      x: offset.value.x + deltaX,
+      y: offset.value.y + deltaY,
+    };
   }
 
-  function fitToScreen(viewportWidth: number, viewportHeight: number) {
+  function fitToScreen(width: number, height: number, padding = 80) {
     const nodes = document.value.nodes;
 
     if (!nodes.length) {
@@ -116,63 +158,117 @@ export const useEditorStore = defineStore("editor", () => {
       return;
     }
 
-    const minX = Math.min(...nodes.map((node) => node.x));
-    const minY = Math.min(...nodes.map((node) => node.y));
+    const layouts = nodes.map((node) => document.value.layout[node.id]).filter(Boolean);
 
-    const maxX = Math.max(...nodes.map((node) => node.x + node.width));
-    const maxY = Math.max(...nodes.map((node) => node.y + node.height));
+    if (!layouts.length) {
+      resetViewport();
+      return;
+    }
 
-    const width = maxX - minX;
-    const height = maxY - minY;
+    const minX = Math.min(...layouts.map((layout) => layout.x));
 
-    const padding = 100;
+    const minY = Math.min(...layouts.map((layout) => layout.y));
 
-    const scaleX = (viewportWidth - padding) / width;
-    const scaleY = (viewportHeight - padding) / height;
+    const maxX = Math.max(...layouts.map((layout) => layout.x + layout.width));
 
-    const nextZoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.2), 2);
+    const maxY = Math.max(...layouts.map((layout) => layout.y + layout.height));
 
-    const centerX = viewportWidth / 2;
-    const centerY = viewportHeight / 2;
+    const contentWidth = maxX - minX;
+    const contentHeight = maxY - minY;
 
-    const diagramCenterX = minX + width / 2;
-    const diagramCenterY = minY + height / 2;
+    if (contentWidth <= 0 || contentHeight <= 0) {
+      resetViewport();
+      return;
+    }
 
-    const nextOffset = {
-      x: centerX - diagramCenterX * nextZoom,
-      y: centerY - diagramCenterY * nextZoom,
+    const availableWidth = Math.max(width - padding * 2, 1);
+
+    const availableHeight = Math.max(height - padding * 2, 1);
+
+    const scaleX = availableWidth / contentWidth;
+    const scaleY = availableHeight / contentHeight;
+
+    const newZoom = Math.min(scaleX, scaleY, MAX_ZOOM);
+
+    setZoom(Math.max(MIN_ZOOM, newZoom));
+
+    const scaledWidth = contentWidth * zoom.value;
+    const scaledHeight = contentHeight * zoom.value;
+
+    offset.value = {
+      x: (width - scaledWidth) / 2 - minX * zoom.value,
+
+      y: (height - scaledHeight) / 2 - minY * zoom.value,
     };
-
-    updateViewport(nextZoom, nextOffset);
   }
+
+  // ---------------------------------------------------------------------------
+  // Document → Source
+  // ---------------------------------------------------------------------------
+
+  function updateSourceFromDocument() {
+    source.value = serializeDiagram(document.value);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Layout
+  // ---------------------------------------------------------------------------
 
   function updateNodePosition(nodeId: string, x: number, y: number) {
+    const currentLayout = document.value.layout[nodeId];
+
+    if (!currentLayout) {
+      return;
+    }
+
+    document.value.layout[nodeId] = {
+      ...currentLayout,
+      x,
+      y,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Semantic node updates
+  // ---------------------------------------------------------------------------
+
+  function updateNodeLabel(nodeId: string, label: string) {
     const node = document.value.nodes.find((item) => item.id === nodeId);
 
     if (!node) {
       return;
     }
 
-    node.x = x;
-    node.y = y;
-  }
+    const nextLabel = label.trim();
 
-  function updateNode(
-    nodeId: string,
-    updates: Partial<{
-      label: string;
-      width: number;
-      height: number;
-    }>,
-  ) {
-    const node = document.value.nodes.find((item) => item.id === nodeId);
-
-    if (!node) {
+    if (!nextLabel) {
       return;
     }
 
-    Object.assign(node, updates);
+    node.label = nextLabel;
+
+    /*
+     * Label changes automatically change
+     * the node dimensions.
+     *
+     * Position remains untouched.
+     */
+    const layout = document.value.layout[nodeId];
+
+    if (layout) {
+      const size = calculateNodeSize(nextLabel);
+
+      layout.width = size.width;
+
+      layout.height = size.height;
+    }
+
+    updateSourceFromDocument();
   }
+
+  // ---------------------------------------------------------------------------
+  // Delete node
+  // ---------------------------------------------------------------------------
 
   function deleteNode(nodeId: string) {
     document.value.nodes = document.value.nodes.filter((node) => node.id !== nodeId);
@@ -181,38 +277,68 @@ export const useEditorStore = defineStore("editor", () => {
       (edge) => edge.from !== nodeId && edge.to !== nodeId,
     );
 
+    delete document.value.layout[nodeId];
+
+    /*
+     * Remove the source identifier
+     * from sourceMap.
+     */
+    for (const [sourceId, internalId] of Object.entries(document.value.sourceMap)) {
+      if (internalId === nodeId) {
+        delete document.value.sourceMap[sourceId];
+      }
+    }
+
     if (selectedNodeId.value === nodeId) {
       selectedNodeId.value = null;
     }
+
+    updateSourceFromDocument();
   }
 
-  parse();
-
   return {
+    // document
     source,
     document,
     errors,
+
+    // viewport
     zoom,
     offset,
+
+    // selection
     selectedNodeId,
     selectedNode,
     hasErrors,
 
+    // parsing
     parse,
     setSource,
+
+    // selection
     selectNode,
 
+    // zoom
     setZoom,
     zoomIn,
     zoomOut,
 
+    // viewport
     resetViewport,
     setOffset,
     updateViewport,
     fitToScreen,
 
+    // document/source synchronization
+    updateSourceFromDocument,
+
+    // visual updates
     updateNodePosition,
-    updateNode,
+
+    // semantic updates
+    updateNodeLabel,
+
+    // node management
     deleteNode,
   };
 });

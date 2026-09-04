@@ -2,7 +2,15 @@ import * as monaco from "monaco-editor";
 
 export const DEV_CANVAS_LANGUAGE = "devcanvas";
 
+let isRegistered = false;
+
 export function registerDevCanvasLanguage() {
+  if (isRegistered) {
+    return;
+  }
+
+  isRegistered = true;
+
   monaco.languages.register({
     id: DEV_CANVAS_LANGUAGE,
   });
@@ -11,8 +19,27 @@ export function registerDevCanvasLanguage() {
     tokenizer: {
       root: [
         [/^(\s*)(flowchart)(\s+)(TD|LR)/, ["white", "keyword", "white", "direction"]],
+
         [/^\s*\/\/.*$/, "comment"],
+
+        [/--/, "operator"],
+
         [/->/, "operator"],
+
+        [/["']/, "string.quote"],
+
+        [/\[/, "delimiter.bracket"],
+
+        [/\]/, "delimiter.bracket"],
+
+        [/\{/, "delimiter.bracket"],
+
+        [/\}/, "delimiter.bracket"],
+
+        [/\(/, "delimiter.bracket"],
+
+        [/\)/, "delimiter.bracket"],
+
         [/[a-zA-Z_][\w-]*/, "identifier"],
       ],
     },
@@ -27,6 +54,29 @@ export function registerDevCanvasLanguage() {
       ["{", "}"],
       ["[", "]"],
       ["(", ")"],
+    ],
+
+    autoClosingPairs: [
+      {
+        open: "[",
+        close: "]",
+      },
+      {
+        open: "{",
+        close: "}",
+      },
+      {
+        open: "(",
+        close: ")",
+      },
+      {
+        open: '"',
+        close: '"',
+      },
+      {
+        open: "'",
+        close: "'",
+      },
     ],
   });
 }

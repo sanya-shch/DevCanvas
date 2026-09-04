@@ -5,56 +5,107 @@ import {
   watch,
 } from 'vue'
 
-import { useEditorStore } from '@/stores/editor'
+import {
+  useEditorStore,
+} from '@/stores/editor'
 
 const store = useEditorStore()
 
-const label = ref('')
-const width = ref(140)
-const height = ref(60)
+// -----------------------------------------------------------------------------
+// Selected node
+// -----------------------------------------------------------------------------
 
-const node = computed(
-  () => store.selectedNode,
-)
+const node =
+  computed(() => {
+    return store.selectedNode
+  })
+
+const layout =
+  computed(() => {
+    if (!node.value) {
+      return null
+    }
+
+    return (
+      store.document.layout[
+        node.value.id
+      ] ?? null
+    )
+  })
+
+// -----------------------------------------------------------------------------
+// Local form state
+// -----------------------------------------------------------------------------
+
+const label = ref('')
+
+// -----------------------------------------------------------------------------
+// Sync form with selected node
+// -----------------------------------------------------------------------------
 
 watch(
-  node,
-  (value) => {
-    if (!value) {
+  [node, layout],
+  () => {
+    if (
+      !node.value ||
+      !layout.value
+    ) {
+      label.value = ''
+
       return
     }
 
-    label.value = value.label
-    width.value = value.width
-    height.value = value.height
+    label.value =
+      node.value.label
   },
   {
     immediate: true,
   },
 )
 
+// -----------------------------------------------------------------------------
+// Validation
+// -----------------------------------------------------------------------------
+
+const canApply =
+  computed(() => {
+    return Boolean(
+      node.value &&
+        layout.value &&
+        label.value.trim(),
+    )
+  })
+
+// -----------------------------------------------------------------------------
+// Apply
+// -----------------------------------------------------------------------------
+
 function applyChanges() {
-  if (!node.value) {
+  if (
+    !node.value ||
+    !layout.value
+  ) {
     return
   }
 
-  store.updateNode(
+  const nextLabel =
+    label.value.trim()
+
+  if (!nextLabel) {
+    return
+  }
+
+  store.updateNodeLabel(
     node.value.id,
-    {
-      label: label.value,
-      width: Math.max(
-        60,
-        width.value,
-      ),
-      height: Math.max(
-        40,
-        height.value,
-      ),
-    },
+    nextLabel,
   )
 }
 
-function removeNode() {
+// -----------------------------------------------------------------------------
+// Delete
+// -----------------------------------------------------------------------------
+
+function deleteNode() {
   if (!node.value) {
     return
   }
@@ -63,189 +114,478 @@ function removeNode() {
     node.value.id,
   )
 }
+
+// -----------------------------------------------------------------------------
+// Keyboard
+// -----------------------------------------------------------------------------
+
+function handleKeyDown(
+  event: KeyboardEvent,
+) {
+  if (
+    (event.metaKey ||
+      event.ctrlKey) &&
+    event.key === 'Enter'
+  ) {
+    event.preventDefault()
+
+    applyChanges()
+  }
+}
 </script>
 
 <template>
-  <aside
-    v-if="node"
-    class="inspector"
-  >
-    <div class="inspector-header">
-      <strong>Node</strong>
-
-      <button
-        class="close-button"
-        @click="store.selectNode(null)"
-      >
-        ×
-      </button>
-    </div>
-
-    <div class="field">
-      <label>ID</label>
-
-      <input
-        :value="node.id"
-        disabled
-      />
-    </div>
-
-    <div class="field">
-      <label>Label</label>
-
-      <input
-        v-model="label"
-        @keydown.enter="applyChanges"
-      />
-    </div>
-
-    <div class="field-row">
-      <div class="field">
-        <label>Width</label>
-
-        <input
-          v-model.number="width"
-          type="number"
-          min="60"
-          @keydown.enter="applyChanges"
-        />
+  <aside class="node-inspector">
+    <div
+      v-if="!node || !layout"
+      class="empty-inspector"
+    >
+      <div class="empty-icon">
+        ⬡
       </div>
 
-      <div class="field">
-        <label>Height</label>
+      <h3>
+        No node selected
+      </h3>
 
-        <input
-          v-model.number="height"
-          type="number"
-          min="40"
-          @keydown.enter="applyChanges"
-        />
-      </div>
+      <p>
+        Select a node on the canvas
+        to edit its properties.
+      </p>
     </div>
 
-    <button
-      class="apply-button"
-      @click="applyChanges"
-    >
-      Apply changes
-    </button>
+    <template v-else>
+      <div class="inspector-header">
+        <div>
+          <span class="eyebrow">
+            Node
+          </span>
 
-    <button
-      class="delete-button"
-      @click="removeNode"
-    >
-      Delete node
-    </button>
+          <h2>
+            {{ node.label }}
+          </h2>
+        </div>
+
+        <button
+          type="button"
+          class="close-button"
+          title="Deselect node"
+          @click="
+            store.selectNode(null)
+          "
+        >
+          ×
+        </button>
+      </div>
+
+      <div class="inspector-content">
+        <div class="field">
+          <label for="node-id">
+            Internal ID
+          </label>
+
+          <input
+            id="node-id"
+            :value="node.id"
+            type="text"
+            readonly
+            class="readonly"
+          />
+        </div>
+
+        <div class="field">
+          <label for="node-label">
+            Label
+          </label>
+
+          <input
+            id="node-label"
+            v-model="label"
+            type="text"
+            autocomplete="off"
+            @keydown="handleKeyDown"
+          />
+        </div>
+
+        <div class="section">
+          <div class="section-title">
+            Position
+          </div>
+
+          <div class="field-grid">
+            <div class="field">
+              <label for="node-x">
+                X
+              </label>
+
+              <input
+                id="node-x"
+                :value="
+                  Math.round(
+                    layout.x,
+                  )
+                "
+                type="number"
+                readonly
+                class="readonly"
+              />
+            </div>
+
+            <div class="field">
+              <label for="node-y">
+                Y
+              </label>
+
+              <input
+                id="node-y"
+                :value="
+                  Math.round(
+                    layout.y,
+                  )
+                "
+                type="number"
+                readonly
+                class="readonly"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">
+            Size
+          </div>
+
+          <div class="field-grid">
+            <div class="field">
+              <label for="node-width">
+                Width
+              </label>
+
+              <input
+                id="node-width"
+                :value="
+                  Math.round(
+                    layout.width,
+                  )
+                "
+                type="number"
+                readonly
+                class="readonly"
+              />
+            </div>
+
+            <div class="field">
+              <label for="node-height">
+                Height
+              </label>
+
+              <input
+                id="node-height"
+                :value="
+                  Math.round(
+                    layout.height,
+                  )
+                "
+                type="number"
+                readonly
+                class="readonly"
+              />
+            </div>
+          </div>
+
+          <p class="size-hint">
+            Size is calculated
+            automatically from the
+            label.
+          </p>
+        </div>
+
+        <div class="actions">
+          <button
+            type="button"
+            class="primary-button"
+            :disabled="!canApply"
+            @click="applyChanges"
+          >
+            Apply changes
+          </button>
+
+          <button
+            type="button"
+            class="danger-button"
+            @click="deleteNode"
+          >
+            Delete node
+          </button>
+        </div>
+      </div>
+    </template>
   </aside>
 </template>
 
 <style scoped>
-.inspector {
-  position: absolute;
+.node-inspector {
+  display: flex;
+  flex-direction: column;
 
-  top: 16px;
-  right: 16px;
+  width: 280px;
+  min-width: 280px;
+  height: 100%;
 
-  width: 240px;
+  border-left: 1px solid var(--border-color);
 
-  padding: 14px;
+  background: var(--panel-background);
+  color: var(--text-primary);
+}
 
-  border: 1px solid var(--border);
-  border-radius: 10px;
+.empty-inspector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 
-  background: var(--surface);
+  height: 100%;
 
-  box-shadow:
-    0 10px 40px rgb(0 0 0 / 20%);
+  padding: 24px;
+
+  text-align: center;
+}
+
+.empty-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 48px;
+  height: 48px;
+
+  margin-bottom: 16px;
+
+  border-radius: 12px;
+
+  background: var(--hover-background);
+
+  font-size: 22px;
+}
+
+.empty-inspector h3 {
+  margin: 0 0 8px;
+
+  font-size: 14px;
+}
+
+.empty-inspector p {
+  max-width: 210px;
+
+  margin: 0;
+
+  color: var(--text-secondary);
+
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .inspector-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
 
-  margin-bottom: 16px;
+  padding: 18px 16px;
+
+  border-bottom: 1px solid var(--border-color);
+}
+
+.eyebrow {
+  display: block;
+
+  margin-bottom: 4px;
+
+  color: var(--text-secondary);
+
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.inspector-header h2 {
+  margin: 0;
+
+  max-width: 190px;
+
+  overflow: hidden;
+
+  font-size: 15px;
+  font-weight: 600;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .close-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 28px;
+  height: 28px;
+
   border: 0;
+  border-radius: 6px;
 
   background: transparent;
   color: var(--text-secondary);
 
-  font-size: 20px;
-
   cursor: pointer;
+
+  font-size: 20px;
+}
+
+.close-button:hover {
+  background: var(--hover-background);
+  color: var(--text-primary);
+}
+
+.inspector-content {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+
+  padding: 16px;
+
+  overflow-y: auto;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.section-title {
+  color: var(--text-secondary);
+
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-
-  margin-bottom: 12px;
+  gap: 6px;
 }
 
-.field-row {
-  display: flex;
+.field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 
-.field-row .field {
-  flex: 1;
-}
-
-label {
+.field label {
   color: var(--text-secondary);
 
   font-size: 11px;
+  font-weight: 500;
 }
 
-input {
+.field input {
   width: 100%;
 
-  border: 1px solid var(--border);
-  border-radius: 5px;
+  box-sizing: border-box;
 
-  padding: 7px 8px;
+  height: 34px;
+
+  padding: 0 9px;
+
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
 
   outline: none;
 
-  background: var(--editor-bg);
+  background: var(--input-background);
   color: var(--text-primary);
 
+  font: inherit;
   font-size: 12px;
+
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
 }
 
-input:focus {
-  border-color: var(--accent);
+.field input:focus {
+  border-color: var(--accent-color);
+
+  box-shadow:
+    0 0 0 2px
+    var(--accent-color-alpha);
 }
 
-.apply-button,
-.delete-button {
+.field input.readonly {
+  cursor: default;
+
+  background: var(--hover-background);
+  color: var(--text-secondary);
+}
+
+.size-hint {
+  margin: 0;
+
+  color: var(--text-secondary);
+
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  padding-top: 4px;
+}
+
+.primary-button,
+.danger-button {
   width: 100%;
+  height: 36px;
 
-  border: 0;
   border-radius: 6px;
 
-  padding: 8px;
-
   cursor: pointer;
+
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
 }
 
-.apply-button {
-  background: var(--accent);
-  color: white;
+.primary-button {
+  border: 1px solid var(--accent-color);
+
+  background: var(--accent-color);
+  color: var(--accent-contrast-color);
 }
 
-.delete-button {
-  margin-top: 8px;
+.primary-button:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.primary-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.danger-button {
+  border: 1px solid var(--danger-border);
 
   background: transparent;
-  color: #ef4444;
+  color: var(--danger-color);
 }
 
-.delete-button:hover {
-  background: rgb(239 68 68 / 10%);
+.danger-button:hover {
+  background: var(--danger-background);
 }
 </style>

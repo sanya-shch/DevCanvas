@@ -2,6 +2,7 @@
 import {
   onBeforeUnmount,
   onMounted,
+  ref,
   watch,
 } from 'vue'
 
@@ -26,13 +27,10 @@ let editor:
   | monaco.editor.IStandaloneCodeEditor
   | null = null
 
-onMounted(() => {
-  const root =
-    document.querySelector(
-      '.code-editor',
-    )
+const rootRef = ref<HTMLElement | null>(null)
 
-  if (!root) {
+onMounted(() => {
+  if (!rootRef.value) {
     return
   }
 
@@ -40,7 +38,7 @@ onMounted(() => {
 
   editor =
     monaco.editor.create(
-      root as HTMLElement,
+      rootRef.value,
       {
         value: props.modelValue,
 
@@ -92,20 +90,26 @@ watch(
     }
 
     if (
-      editor.getValue() !== value
+      editor.getValue() === value
     ) {
-      editor.setValue(value)
+      return
     }
+
+    editor.setValue(value)
   },
 )
 
 onBeforeUnmount(() => {
   editor?.dispose()
+  editor = null
 })
 </script>
 
 <template>
-  <div class="code-editor" />
+  <div
+    ref="rootRef"
+    class="code-editor"
+  />
 </template>
 
 <style scoped>
