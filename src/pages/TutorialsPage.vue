@@ -1,158 +1,133 @@
 <script setup lang="ts">
-import { RouterLink } from 'vue-router'
-
-const tutorials = [
-  {
-    slug: 'flowchart-basics',
-    title: 'Flowchart Basics',
-    description:
-      'Learn how to create your first flowchart with DevCanvas.',
-  },
-  {
-    slug: 'api-architecture',
-    title: 'API Architecture',
-    description:
-      'Visualize a typical browser, API and database architecture.',
-  },
-  {
-    slug: 'frontend-architecture',
-    title: 'Frontend Architecture',
-    description:
-      'Explore how to represent frontend application architecture as a diagram.',
-  },
-]
+import { tutorials } from '@/features/tutorials/tutorialRegistry'
 </script>
 
 <template>
-  <div class="tutorials-page">
-    <header class="page-header">
-      <span class="eyebrow">
-        Learn
-      </span>
+  <section class="tutorials-page">
+    <div class="tutorials-container">
+      <header class="tutorials-header">
+        <p class="eyebrow">
+          Learn DevCanvas
+        </p>
 
-      <h1>
-        Tutorials
-      </h1>
+        <h1>
+          Tutorials
+        </h1>
 
-      <p>
-        Learn diagramming concepts through small,
-        practical examples you can open directly in the editor.
-      </p>
-    </header>
+        <p class="subtitle">
+          Learn diagramming concepts and open
+          every example directly in the editor.
+        </p>
+      </header>
 
-    <section class="tutorial-list">
-      <article
-        v-for="tutorial in tutorials"
-        :key="tutorial.slug"
-        class="tutorial-card"
-      >
-        <div class="tutorial-content">
-          <h2>
-            {{ tutorial.title }}
-          </h2>
-
-          <p>
-            {{ tutorial.description }}
-          </p>
-        </div>
-
-        <RouterLink
-          to="/editor"
-          class="tutorial-link"
+      <div class="tutorials-grid">
+        <article
+          v-for="tutorial in tutorials"
+          :key="tutorial.slug"
+          class="tutorial-card"
         >
-          Open in editor →
-        </RouterLink>
-      </article>
-    </section>
-  </div>
+          <div class="tutorial-card-content">
+            <h2>
+              {{ tutorial.title }}
+            </h2>
+
+            <p>
+              {{ tutorial.description }}
+            </p>
+          </div>
+
+          <RouterLink
+            :to="{
+              path: '/editor',
+              query: {
+                source: tutorial.source,
+              },
+            }"
+            class="tutorial-link"
+          >
+            Open in editor →
+          </RouterLink>
+        </article>
+      </div>
+    </div>
+  </section>
 </template>
 
 <style scoped>
 .tutorials-page {
-  width: min(1000px, calc(100% - 48px));
-
-  margin: 0 auto;
-  padding: 72px 0;
+  min-height: 100%;
+  padding: 72px 24px;
 }
 
-.page-header {
-  max-width: 680px;
+.tutorials-container {
+  width: min(1100px, 100%);
+  margin: 0 auto;
+}
 
+.tutorials-header {
+  max-width: 720px;
   margin-bottom: 48px;
 }
 
 .eyebrow {
+  margin: 0 0 12px;
   color: var(--text-secondary);
-
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
-  letter-spacing: 0.05em;
   text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 h1 {
-  margin: 10px 0 0;
-
-  color: var(--accent-color);
-
-  font-size: 42px;
+  margin: 0 0 16px;
+  font-size: 48px;
   line-height: 1.1;
-  letter-spacing: -0.035em;
+  color: var(--accent-color);
 }
 
-.page-header p {
-  margin: 16px 0 0;
-
+.subtitle {
+  margin: 0;
   color: var(--text-secondary);
-
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1.6;
 }
 
-.tutorial-list {
+.tutorials-grid {
   display: grid;
-  gap: 12px;
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+  gap: 24px;
 }
 
 .tutorial-card {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-
-  padding: 22px 24px;
-
+  flex-direction: column;
+  min-height: 240px;
+  padding: 24px;
   border: 1px solid var(--border-color);
-  border-radius: 10px;
-
-  background: var(--panel-background);
+  border-radius: 16px;
+  background: var(--surface);
 }
 
-.tutorial-content {
-  min-width: 0;
+.tutorial-card-content {
+  flex: 1;
 }
 
-.tutorial-content h2 {
+h2 {
+  margin: 0 0 12px;
+  font-size: 20px;
+}
+
+.tutorial-card p {
   margin: 0;
-
-  font-size: 16px;
-}
-
-.tutorial-content p {
-  margin: 7px 0 0;
-
   color: var(--text-secondary);
-
-  font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 .tutorial-link {
-  flex-shrink: 0;
-
+  align-self: flex-start;
+  margin-top: 24px;
   color: var(--text-primary);
-
-  font-size: 13px;
   font-weight: 600;
   text-decoration: none;
 }
@@ -161,10 +136,9 @@ h1 {
   text-decoration: underline;
 }
 
-@media (max-width: 640px) {
-  .tutorial-card {
-    align-items: flex-start;
-    flex-direction: column;
+@media (max-width: 900px) {
+  .tutorials-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

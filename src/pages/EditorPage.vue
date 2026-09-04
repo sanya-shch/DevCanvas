@@ -5,6 +5,7 @@ import {
   onMounted,
   watch,
 } from 'vue'
+import { useRoute } from 'vue-router'
 
 import { useEditorStore } from '@/stores/editor'
 
@@ -13,6 +14,7 @@ import DiagramCanvas from '@/components/canvas/DiagramCanvas.vue'
 import NodeInspector from '@/components/canvas/NodeInspector.vue'
 
 const store = useEditorStore()
+const route = useRoute()
 
 let parseTimeout: ReturnType<typeof setTimeout> | null = null
 
@@ -35,14 +37,16 @@ watch(
 )
 
 onMounted(async () => {
+  const source = route.query.source
+
+  if (typeof source === 'string') {
+    store.setSource(source)
+  }
+
   store.parse()
 
   await nextTick()
 
-  /*
-   * Give the canvas a moment to render before calculating
-   * the initial viewport.
-   */
   requestAnimationFrame(() => {
     const canvas = document.querySelector(
       '.diagram-canvas',
