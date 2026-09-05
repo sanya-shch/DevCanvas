@@ -1,3 +1,5 @@
+import type { NodeShape } from "./types";
+
 const MIN_NODE_WIDTH = 140;
 const MAX_NODE_WIDTH = 360;
 
@@ -75,7 +77,7 @@ export function wrapNodeLabel(label: string, width: number): string[] {
 /**
  * Calculates the automatic node dimensions from its label.
  */
-export function calculateNodeSize(label: string): NodeSize {
+export function calculateNodeSize(label: string, shape: NodeShape = "rectangle"): NodeSize {
   const normalizedLabel = label.trim() || "Node";
 
   const longestLine = normalizedLabel
@@ -89,6 +91,15 @@ export function calculateNodeSize(label: string): NodeSize {
   const lines = wrapNodeLabel(normalizedLabel, width);
 
   const height = Math.max(MIN_NODE_HEIGHT, lines.length * LINE_HEIGHT + VERTICAL_PADDING);
+
+  if (shape === "circle") {
+    const dimension = Math.max(width, height);
+
+    return {
+      width: dimension,
+      height: dimension,
+    };
+  }
 
   return {
     width,

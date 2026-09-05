@@ -8,6 +8,7 @@ import {
 import {
   useEditorStore,
 } from '@/stores/editor'
+import type { NodeShape } from "@/features/diagram/types";
 
 const store = useEditorStore()
 
@@ -38,6 +39,43 @@ const layout =
 // -----------------------------------------------------------------------------
 
 const label = ref('')
+
+const nodeShapes: Array<{
+  value: NodeShape;
+  label: string;
+}> = [
+  {
+    value: "rectangle",
+    label: "Rectangle",
+  },
+  {
+    value: "rounded",
+    label: "Rounded",
+  },
+  {
+    value: "circle",
+    label: "Circle",
+  },
+  {
+    value: "diamond",
+    label: "Diamond",
+  },
+];
+
+function updateShape(event: Event) {
+  if (!node.value) {
+    return
+  }
+
+  const shape = (
+    event.target as HTMLSelectElement
+  ).value as NodeShape
+
+  store.updateNodeShape(
+    node.value.id,
+    shape,
+  )
+}
 
 // -----------------------------------------------------------------------------
 // Sync form with selected node
@@ -299,6 +337,29 @@ function handleKeyDown(
             automatically from the
             label.
           </p>
+        </div>
+
+        <div
+          v-if="node"
+          class="inspector-field"
+        >
+          <label for="node-shape">
+            Shape
+          </label>
+
+          <select
+            id="node-shape"
+            :value="node.shape"
+            @change="updateShape"
+          >
+            <option
+              v-for="shape in nodeShapes"
+              :key="shape.value"
+              :value="shape.value"
+            >
+              {{ shape.label }}
+            </option>
+          </select>
         </div>
 
         <div class="actions">
@@ -587,5 +648,26 @@ function handleKeyDown(
 
 .danger-button:hover {
   background: var(--danger-background);
+}
+
+.field select {
+  width: 100%;
+  height: 34px;
+
+  padding: 0 10px;
+
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+
+  background: var(--input-background);
+  color: var(--text-primary);
+
+  font: inherit;
+  font-size: 13px;
+}
+
+.field select:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 1px;
 }
 </style>

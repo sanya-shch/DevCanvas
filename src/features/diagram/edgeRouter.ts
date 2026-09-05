@@ -30,13 +30,6 @@ function getRect(layout: DiagramLayout, nodeId: string): Rect | null {
   return rect;
 }
 
-function getCenter(rect: Rect): EdgePoint {
-  return {
-    x: rect.x + rect.width / 2,
-    y: rect.y + rect.height / 2,
-  };
-}
-
 function expandRect(rect: Rect, gap: number): Rect {
   return {
     x: rect.x - gap,

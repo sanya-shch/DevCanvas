@@ -158,9 +158,34 @@ function handleInputKeyDown(
     @dblclick="startEditing"
   >
     <rect
+      v-if="node.shape === 'rectangle'"
       :width="layout.width"
       :height="layout.height"
-      rx="8"
+    />
+
+    <rect
+      v-else-if="node.shape === 'rounded'"
+      :width="layout.width"
+      :height="layout.height"
+      rx="12"
+    />
+
+    <ellipse
+      v-else-if="node.shape === 'circle'"
+      :cx="layout.width / 2"
+      :cy="layout.height / 2"
+      :rx="layout.width / 2"
+      :ry="layout.height / 2"
+    />
+
+    <polygon
+      v-else-if="node.shape === 'diamond'"
+      :points="`
+        ${layout.width / 2},0
+        ${layout.width},${layout.height / 2}
+        ${layout.width / 2},${layout.height}
+        0,${layout.height / 2}
+      `"
     />
 
     <text
@@ -229,14 +254,20 @@ function handleInputKeyDown(
   cursor: move;
 }
 
-.diagram-node rect {
+.diagram-node rect,
+.diagram-node ellipse,
+.diagram-node polygon {
   fill: var(--node-bg);
   stroke: var(--node-border);
   stroke-width: 2;
 }
 
 .diagram-node:hover rect,
-.diagram-node.selected rect {
+.diagram-node:hover ellipse,
+.diagram-node:hover polygon,
+.diagram-node.selected rect,
+.diagram-node.selected ellipse,
+.diagram-node.selected polygon {
   stroke: var(--accent-color);
 }
 
@@ -266,7 +297,7 @@ function handleInputKeyDown(
 
   padding: 6px 8px;
 
-  border: 1px solid var(--accent);
+  border: 1px solid var(--accent-color);
   border-radius: 5px;
 
   outline: none;

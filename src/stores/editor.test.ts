@@ -846,6 +846,36 @@ A -> B
       });
     });
   });
+
+  it("updates node shape", () => {
+    const store = useEditorStore();
+
+    store.createNewDiagram();
+
+    const node = store.document.nodes[0];
+
+    expect(node.shape).toBe("rectangle");
+
+    store.updateNodeShape(node.id, "circle");
+
+    expect(node.shape).toBe("circle");
+  });
+
+  it("adds shape changes to history", () => {
+    const store = useEditorStore();
+
+    store.createNewDiagram();
+
+    const node = store.document.nodes[0];
+
+    store.updateNodeShape(node.id, "diamond");
+
+    expect(store.document.nodes[0].shape).toBe("diamond");
+
+    store.undo();
+
+    expect(store.document.nodes[0].shape).toBe("rectangle");
+  });
 });
 
 describe("useEditorStore autosave", () => {

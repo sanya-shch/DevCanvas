@@ -12,6 +12,7 @@ import type {
   DiagramDocument,
   DiagramLayout,
   DiagramSourceMap,
+  NodeShape,
   ParseError,
 } from "@/features/diagram/types";
 import type { SavedDiagram } from "@/features/diagrams/types";
@@ -141,6 +142,7 @@ A["Start"] -> B["End"]
         layout: cloneLayout(document.value.layout),
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
+        nodes: document.value.nodes.map((node) => ({ ...node })),
       };
 
       await diagramsStore.saveDiagram(diagram);
@@ -200,7 +202,7 @@ A["Start"] -> B["End"]
 
       const previousDocument: DiagramDocument = {
         direction: saved.direction,
-        nodes: [],
+        nodes: saved.nodes ?? [],
         edges: [],
         layout: cloneLayout(saved.layout),
         sourceMap: cloneSourceMap(saved.sourceMap),
@@ -513,6 +515,33 @@ A["Start"] -> B["End"]
   }
 
   // ---------------------------------------------------------------------------
+  // Shape
+  // ---------------------------------------------------------------------------
+
+  function updateNodeShape(nodeId: string, shape: NodeShape) {
+    const node = document.value.nodes.find((item) => item.id === nodeId);
+
+    if (!node || node.shape === shape) {
+      return;
+    }
+
+    commitDocument(() => {
+      node.shape = shape;
+
+      const layout = document.value.layout[nodeId];
+
+      if (!layout) {
+        return;
+      }
+
+      const size = calculateNodeSize(node.label, shape);
+
+      layout.width = size.width;
+      layout.height = size.height;
+    });
+  }
+
+  // ---------------------------------------------------------------------------
   // Semantic node updates
   // ---------------------------------------------------------------------------
 
@@ -538,10 +567,17 @@ A["Start"] -> B["End"]
         return;
       }
 
-      const size = calculateNodeSize(nextLabel);
+      const size = calculateNodeSize(nextLabel, node.shape);
 
-      layout.width = size.width;
-      layout.height = size.height;
+      if (node.shape === "circle") {
+        const dimension = Math.max(size.width, size.height);
+
+        layout.width = dimension;
+        layout.height = dimension;
+      } else {
+        layout.width = size.width;
+        layout.height = size.height;
+      }
     });
   }
 
@@ -713,5 +749,7 @@ A["Start"] -> B["End"]
     createNewDiagram,
     saveDiagram,
     loadDiagram,
+
+    updateNodeShape,
   };
 });

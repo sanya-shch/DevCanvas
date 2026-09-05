@@ -32,10 +32,12 @@ describe("serializeDiagram", () => {
         {
           id: "node_a",
           label: "a",
+          shape: "rectangle",
         },
         {
           id: "node_b",
           label: "b",
+          shape: "rectangle",
         },
       ],
       edges: [
@@ -64,10 +66,12 @@ a -> b`,
         {
           id: "node_browser",
           label: "Web Browser",
+          shape: "rectangle",
         },
         {
           id: "node_api",
           label: "API Gateway",
+          shape: "rectangle",
         },
       ],
       edges: [
@@ -96,10 +100,12 @@ browser["Web Browser"] -> api["API Gateway"]`,
         {
           id: "node_a",
           label: "a",
+          shape: "rectangle",
         },
         {
           id: "node_b",
           label: "b",
+          shape: "rectangle",
         },
       ],
       edges: [
@@ -125,10 +131,12 @@ browser["Web Browser"] -> api["API Gateway"]`,
         {
           id: "node_a",
           label: 'API "Gateway"',
+          shape: "rectangle",
         },
         {
           id: "node_b",
           label: "Database",
+          shape: "rectangle",
         },
       ],
       edges: [
@@ -153,10 +161,12 @@ browser["Web Browser"] -> api["API Gateway"]`,
         {
           id: "node_a",
           label: "C:\\Users\\Admin",
+          shape: "rectangle",
         },
         {
           id: "node_b",
           label: "B",
+          shape: "rectangle",
         },
       ],
       edges: [
@@ -180,6 +190,7 @@ browser["Web Browser"] -> api["API Gateway"]`,
         {
           id: "node_a",
           label: "Browser",
+          shape: "rectangle",
         },
       ],
     });

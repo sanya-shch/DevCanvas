@@ -1,10 +1,16 @@
-import type { DiagramDirection, DiagramLayout, DiagramSourceMap } from "@/features/diagram/types";
+import type {
+  DiagramLayout,
+  DiagramNode,
+  DiagramSourceMap,
+  DiagramDirection,
+} from "@/features/diagram/types";
 
 export interface SavedDiagram {
   id: string;
   title: string;
   source: string;
   direction: DiagramDirection;
+  nodes: DiagramNode[];
   sourceMap: DiagramSourceMap;
   layout: DiagramLayout;
   createdAt: number;

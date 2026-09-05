@@ -1,8 +1,11 @@
 export type DiagramDirection = "TD" | "LR";
 
+export type NodeShape = "rectangle" | "rounded" | "circle" | "diamond";
+
 export interface DiagramNode {
   id: string;
   label: string;
+  shape: NodeShape;
 }
 
 export interface DiagramEdge {

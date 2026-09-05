@@ -8,8 +8,6 @@ import {
   saveDiagram as drSaveDiagram,
 } from "@/features/diagrams/diagramRepository";
 
-import { generateDiagramId } from "@/features/diagrams/diagramStorage";
-
 import type { SavedDiagram } from "@/features/diagrams/types";
 
 export const useDiagramsStore = defineStore("diagrams", () => {
@@ -34,29 +32,6 @@ export const useDiagramsStore = defineStore("diagrams", () => {
     } finally {
       isLoading.value = false;
     }
-  }
-
-  async function createDiagram(
-    title: string,
-    source: string,
-    layout: SavedDiagram["layout"],
-  ): Promise<SavedDiagram> {
-    const now = Date.now();
-
-    const diagram: SavedDiagram = {
-      id: generateDiagramId(),
-      title,
-      source,
-      layout,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    await saveDiagram(diagram);
-
-    diagrams.value = [diagram, ...diagrams.value];
-
-    return diagram;
   }
 
   async function updateDiagram(diagram: SavedDiagram) {
@@ -105,7 +80,6 @@ export const useDiagramsStore = defineStore("diagrams", () => {
     error,
     sortedDiagrams,
     loadDiagrams,
-    createDiagram,
     updateDiagram,
     saveDiagram,
     getById,

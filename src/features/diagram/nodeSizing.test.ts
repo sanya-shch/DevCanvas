@@ -66,4 +66,16 @@ describe("nodeSizing", () => {
 
     expect(size.height).toBeGreaterThan(56);
   });
+
+  it("creates square dimensions for circle nodes", () => {
+    const size = calculateNodeSize("A very long node label", "circle");
+
+    expect(size.width).toBe(size.height);
+  });
+
+  it("keeps normal dimensions for rectangle nodes", () => {
+    const size = calculateNodeSize("A very long node label", "rectangle");
+
+    expect(size.width).not.toBe(size.height);
+  });
 });

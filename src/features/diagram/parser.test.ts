@@ -274,4 +274,48 @@ describe("parseDiagram", () => {
 
     expect(result.errors.length).toBeGreaterThan(0);
   });
+
+  it("uses rectangle as the default node shape", () => {
+    const result = parseDiagram(`
+    flowchart LR
+    A["Start"] -> B["End"]
+  `);
+
+    expect(result.errors).toHaveLength(0);
+
+    expect(result.document.nodes.every((node) => node.shape === "rectangle")).toBe(true);
+  });
+
+  it("preserves node shape when reparsing", () => {
+    const first = parseDiagram(`
+    flowchart LR
+    A["Start"] -> B["End"]
+  `);
+
+    expect(first.errors).toHaveLength(0);
+
+    const startNode = first.document.nodes.find((node) => first.document.sourceMap.A === node.id);
+
+    expect(startNode).toBeDefined();
+
+    if (!startNode) {
+      return;
+    }
+
+    startNode.shape = "circle";
+
+    const second = parseDiagram(
+      `
+      flowchart LR
+      A["Updated Start"] -> B["End"]
+    `,
+      first.document,
+    );
+
+    expect(second.errors).toHaveLength(0);
+
+    const updatedNode = second.document.nodes.find((node) => node.id === startNode.id);
+
+    expect(updatedNode?.shape).toBe("circle");
+  });
 });

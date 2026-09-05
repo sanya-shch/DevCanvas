@@ -6,7 +6,7 @@ import type {
   ParseError,
   ParseResult,
 } from "./types";
-
+import { DEFAULT_NODE_SHAPE, normalizeNodeShape } from "./nodeShape";
 import { createNodeLayout } from "./layout";
 
 function generateNodeId(): string {
@@ -293,9 +293,12 @@ function getOrCreateNode(
 
   const id = getOrCreateNodeId(parsedNode.sourceId, context.previousDocument);
 
+  const previousNode = context.previousDocument?.nodes.find((node) => node.id === id);
+
   const node: DiagramNode = {
     id,
     label: parsedNode.label,
+    shape: normalizeNodeShape(previousNode?.shape ?? DEFAULT_NODE_SHAPE),
   };
 
   context.nodes.set(parsedNode.sourceId, node);
