@@ -1,810 +1,459 @@
 import type {
-  DiagramDocument,
   DiagramDirection,
+  DiagramDocument,
   DiagramEdge,
-  DiagramLayout,
   DiagramNode,
-  DiagramSourceMap,
   ParseError,
   ParseResult,
 } from "./types";
 
-import { calculateNodeSize } from "./nodeSizing";
-
-const HORIZONTAL_GAP = 100;
-const VERTICAL_GAP = 100;
-
-const START_X = 100;
-const START_Y = 100;
-
-const IDENTIFIER_PATTERN = /^[A-Za-z0-9_-]+/;
-
-type NodeReference = {
-  sourceId: string;
-  label?: string;
-  nextIndex: number;
-};
-
-type ParsedString = {
-  value: string;
-  nextIndex: number;
-};
+import { createNodeLayout } from "./layout";
 
 function generateNodeId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return `node_${crypto.randomUUID().slice(0, 8)}`;
   }
 
-  return `node_${Math.random().toString(36).slice(2, 10)}`;
+  return `node_${Math.random().toString(16).slice(2, 10)}`;
 }
 
 function generateEdgeId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return `edge_${crypto.randomUUID().slice(0, 8)}`;
   }
 
-  return `edge_${Math.random().toString(36).slice(2, 10)}`;
+  return `edge_${Math.random().toString(16).slice(2, 10)}`;
 }
 
-function isWhitespace(value: string): boolean {
-  return /\s/.test(value);
+interface ParsedNode {
+  sourceId: string;
+  label: string;
 }
 
-function skipWhitespace(input: string, index: number): number {
-  let current = index;
-
-  while (current < input.length && isWhitespace(input[current])) {
-    current += 1;
-  }
-
-  return current;
+interface ParsedEdge {
+  from: ParsedNode;
+  to: ParsedNode;
+  label?: string;
 }
 
-function parseQuotedString(input: string, startIndex: number): ParsedString | null {
-  const quote = input[startIndex];
-
-  if (quote !== '"' && quote !== "'") {
-    return null;
-  }
-
-  let value = "";
-  let index = startIndex + 1;
-
-  while (index < input.length) {
-    const char = input[index];
-
-    if (char === "\\") {
-      const next = input[index + 1];
-
-      if (next === undefined) {
-        return null;
-      }
-
-      switch (next) {
-        case "n":
-          value += "\n";
-          break;
-
-        case "r":
-          value += "\r";
-          break;
-
-        case "t":
-          value += "\t";
-          break;
-
-        case "\\":
-          value += "\\";
-          break;
-
-        case '"':
-          value += '"';
-          break;
-
-        case "'":
-          value += "'";
-          break;
-
-        default:
-          value += next;
-          break;
-      }
-
-      index += 2;
-      continue;
-    }
-
-    if (char === quote) {
-      return {
-        value,
-        nextIndex: index + 1,
-      };
-    }
-
-    value += char;
-    index += 1;
-  }
-
-  return null;
+interface ParserContext {
+  direction: DiagramDirection;
+  nodes: Map<string, DiagramNode>;
+  edges: DiagramEdge[];
+  sourceMap: Record<string, string>;
+  errors: ParseError[];
+  previousDocument?: DiagramDocument;
 }
 
-function readBracketContent(
-  input: string,
-  startIndex: number,
-): {
-  content: string;
-  nextIndex: number;
-} | null {
-  const open = input[startIndex];
-
-  const close = open === "[" ? "]" : open === "{" ? "}" : open === "(" ? ")" : null;
-
-  if (!close) {
-    return null;
-  }
-
-  let index = startIndex + 1;
-  let content = "";
-
-  let quote: '"' | "'" | null = null;
-
-  while (index < input.length) {
-    const char = input[index];
-
-    if (quote) {
-      content += char;
-
-      if (char === "\\") {
-        const next = input[index + 1];
-
-        if (next !== undefined) {
-          content += next;
-          index += 2;
-          continue;
-        }
-      }
-
-      if (char === quote) {
-        quote = null;
-      }
-
-      index += 1;
-      continue;
-    }
-
-    if (char === '"' || char === "'") {
-      quote = char;
-      content += char;
-      index += 1;
-      continue;
-    }
-
-    if (char === close) {
-      return {
-        content,
-        nextIndex: index + 1,
-      };
-    }
-
-    content += char;
-    index += 1;
-  }
-
-  return null;
-}
-
-function decodeLabel(content: string): string | null {
-  const value = content.trim();
-
-  if (!value) {
-    return "";
-  }
-
-  const first = value[0];
-
-  if (first !== '"' && first !== "'") {
-    return value;
-  }
-
-  const parsed = parseQuotedString(value, 0);
-
-  if (!parsed) {
-    return null;
-  }
-
-  if (value.slice(parsed.nextIndex).trim()) {
-    return null;
-  }
-
-  return parsed.value;
-}
-
-function parseNodeReference(
-  input: string,
-  startIndex: number,
-):
-  | NodeReference
-  | {
-      error: string;
-    } {
-  let index = skipWhitespace(input, startIndex);
-
-  const identifierMatch = input.slice(index).match(IDENTIFIER_PATTERN);
-
-  if (!identifierMatch) {
-    return {
-      error: "Expected a node identifier.",
-    };
-  }
-
-  const sourceId = identifierMatch[0];
-
-  index += sourceId.length;
-
-  index = skipWhitespace(input, index);
-
-  let label: string | undefined;
-
-  const bracket = input[index];
-
-  if (bracket === "[" || bracket === "{" || bracket === "(") {
-    const result = readBracketContent(input, index);
-
-    if (!result) {
-      return {
-        error: "Unclosed node label.",
-      };
-    }
-
-    const decoded = decodeLabel(result.content);
-
-    if (decoded === null) {
-      return {
-        error: "Invalid node label.",
-      };
-    }
-
-    label = decoded;
-
-    index = result.nextIndex;
-  }
-
+function createParseError(line: number, message: string): ParseError {
   return {
-    sourceId,
-    label,
-    nextIndex: index,
+    line,
+    message,
   };
 }
 
-function findArrow(input: string, startIndex: number): number {
-  let index = startIndex;
+function unescapeQuotedValue(value: string): string {
+  return value
+    .replace(/\\n/g, "\n")
+    .replace(/\\r/g, "\r")
+    .replace(/\\t/g, "\t")
+    .replace(/\\"/g, '"')
+    .replace(/\\'/g, "'")
+    .replace(/\\\\/g, "\\");
+}
 
-  let quote: '"' | "'" | null = null;
+function findClosingQuote(value: string, start: number): number {
+  const quote = value[start];
 
-  while (index < input.length - 1) {
-    const char = input[index];
-
-    if (quote) {
-      if (char === "\\") {
-        index += 2;
-        continue;
-      }
-
-      if (char === quote) {
-        quote = null;
-      }
-
+  for (let index = start + 1; index < value.length; index += 1) {
+    if (value[index] === "\\") {
       index += 1;
       continue;
     }
 
-    if (char === '"' || char === "'") {
-      quote = char;
-      index += 1;
-      continue;
-    }
-
-    if (input[index] === "-" && input[index + 1] === ">") {
+    if (value[index] === quote) {
       return index;
     }
-
-    index += 1;
   }
 
   return -1;
 }
 
-function parseEdgeLabel(value: string): string | null {
-  const trimmed = value.trim();
+function parseNodeReference(value: string, line: number, errors: ParseError[]): ParsedNode | null {
+  const input = value.trim();
 
-  if (!trimmed) {
+  if (!input) {
+    errors.push(createParseError(line, "Node reference cannot be empty."));
+
     return null;
   }
 
-  const decoded = decodeLabel(trimmed);
+  const match = input.match(/^([A-Za-z_][A-Za-z0-9_-]*)(.*)$/);
 
-  return decoded;
+  if (!match) {
+    errors.push(createParseError(line, `Invalid node identifier: "${input}".`));
+
+    return null;
+  }
+
+  const sourceId = match[1];
+  const suffix = match[2].trim();
+
+  if (!suffix) {
+    return {
+      sourceId,
+      label: sourceId,
+    };
+  }
+
+  const opening = suffix[0];
+
+  const closingByOpening: Record<string, string> = {
+    "[": "]",
+    "{": "}",
+    "(": ")",
+  };
+
+  const closing = closingByOpening[opening];
+
+  if (!closing) {
+    errors.push(createParseError(line, `Invalid node declaration for "${sourceId}".`));
+
+    return null;
+  }
+
+  if (!suffix.endsWith(closing)) {
+    errors.push(createParseError(line, `Unclosed node label for "${sourceId}".`));
+
+    return null;
+  }
+
+  const content = suffix.slice(1, -1).trim();
+
+  if (!content) {
+    return {
+      sourceId,
+      label: sourceId,
+    };
+  }
+
+  const quote = content[0];
+
+  if (quote === '"' || quote === "'") {
+    const closingQuote = findClosingQuote(content, 0);
+
+    if (closingQuote === -1 || closingQuote !== content.length - 1) {
+      errors.push(createParseError(line, `Invalid quoted label for "${sourceId}".`));
+
+      return null;
+    }
+
+    return {
+      sourceId,
+      label: unescapeQuotedValue(content.slice(1, closingQuote)),
+    };
+  }
+
+  return {
+    sourceId,
+    label: content,
+  };
+}
+
+function parseEdgeLabel(value: string, line: number, errors: ParseError[]): string | undefined {
+  const input = value.trim();
+
+  if (!input) {
+    return undefined;
+  }
+
+  const quote = input[0];
+
+  if (quote === '"' || quote === "'") {
+    const closingQuote = findClosingQuote(input, 0);
+
+    if (closingQuote === -1 || closingQuote !== input.length - 1) {
+      errors.push(createParseError(line, "Invalid quoted edge label."));
+
+      return undefined;
+    }
+
+    return unescapeQuotedValue(input.slice(1, closingQuote));
+  }
+
+  return input;
+}
+
+function parseEdgeStatement(
+  statement: string,
+  line: number,
+  errors: ParseError[],
+): ParsedEdge | null {
+  const labelSeparator = statement.indexOf("--");
+
+  if (labelSeparator !== -1) {
+    const left = statement.slice(0, labelSeparator).trim();
+
+    const remainder = statement.slice(labelSeparator + 2).trim();
+
+    const arrowIndex = remainder.indexOf("->");
+
+    if (arrowIndex === -1) {
+      errors.push(createParseError(line, 'Expected "->" after edge label.'));
+
+      return null;
+    }
+
+    const labelValue = remainder.slice(0, arrowIndex).trim();
+
+    const right = remainder.slice(arrowIndex + 2).trim();
+
+    const from = parseNodeReference(left, line, errors);
+
+    const to = parseNodeReference(right, line, errors);
+
+    if (!from || !to) {
+      return null;
+    }
+
+    const label = parseEdgeLabel(labelValue, line, errors);
+
+    return {
+      from,
+      to,
+      ...(label !== undefined ? { label } : {}),
+    };
+  }
+
+  const arrowIndex = statement.indexOf("->");
+
+  if (arrowIndex === -1) {
+    errors.push(createParseError(line, 'Expected "->" edge operator.'));
+
+    return null;
+  }
+
+  const left = statement.slice(0, arrowIndex).trim();
+
+  const right = statement.slice(arrowIndex + 2).trim();
+
+  if (!left || !right) {
+    errors.push(createParseError(line, "Both source and target nodes are required."));
+
+    return null;
+  }
+
+  const from = parseNodeReference(left, line, errors);
+
+  const to = parseNodeReference(right, line, errors);
+
+  if (!from || !to) {
+    return null;
+  }
+
+  return {
+    from,
+    to,
+  };
+}
+
+function getOrCreateNodeId(sourceId: string, previousDocument?: DiagramDocument): string {
+  const existingId = previousDocument?.sourceMap[sourceId];
+
+  if (existingId) {
+    return existingId;
+  }
+
+  return generateNodeId();
 }
 
 function getOrCreateNode(
-  sourceId: string,
-  label: string | undefined,
-  nodes: Map<string, DiagramNode>,
-  sourceMap: DiagramSourceMap,
-  previousSourceMap?: DiagramSourceMap,
-  explicitLabels?: Map<string, string>,
-  line?: number,
-  errors?: ParseError[],
+  parsedNode: ParsedNode,
+  context: ParserContext,
+  line: number,
 ): DiagramNode {
-  let node = nodes.get(sourceId);
+  const existingNode = context.nodes.get(parsedNode.sourceId);
 
-  if (!node) {
-    const existingId = previousSourceMap?.[sourceId];
-
-    const id = existingId ?? generateNodeId();
-
-    node = {
-      id,
-      label: label ?? sourceId,
-    };
-
-    nodes.set(sourceId, node);
-    sourceMap[sourceId] = id;
-
-    if (label !== undefined) {
-      explicitLabels?.set(sourceId, label);
+  if (existingNode) {
+    if (
+      existingNode.label !== parsedNode.label &&
+      parsedNode.label !== parsedNode.sourceId &&
+      existingNode.label !== parsedNode.sourceId
+    ) {
+      context.errors.push(
+        createParseError(
+          line,
+          `Node "${parsedNode.sourceId}" has conflicting labels: "${existingNode.label}" and "${parsedNode.label}".`,
+        ),
+      );
     }
 
-    return node;
+    return existingNode;
   }
 
-  sourceMap[sourceId] = node.id;
+  const id = getOrCreateNodeId(parsedNode.sourceId, context.previousDocument);
 
-  if (label !== undefined) {
-    const previousExplicit = explicitLabels?.get(sourceId);
+  const node: DiagramNode = {
+    id,
+    label: parsedNode.label,
+  };
 
-    if (previousExplicit !== undefined && previousExplicit !== label) {
-      errors?.push({
-        line: line ?? 0,
-        message: `Conflicting labels for node "${sourceId}".`,
-      });
+  context.nodes.set(parsedNode.sourceId, node);
 
-      return node;
-    }
-
-    if (previousExplicit === undefined) {
-      explicitLabels?.set(sourceId, label);
-
-      node.label = label;
-    }
-  }
+  context.sourceMap[parsedNode.sourceId] = id;
 
   return node;
 }
 
-function parseEdgeStatement(
-  line: string,
-  lineNumber: number,
-  nodes: Map<string, DiagramNode>,
+function edgeAlreadyExists(
   edges: DiagramEdge[],
-  sourceMap: DiagramSourceMap,
-  previousSourceMap?: DiagramSourceMap,
-  explicitLabels?: Map<string, string>,
-  errors?: ParseError[],
-): void {
-  const fromResult = parseNodeReference(line, 0);
-
-  if ("error" in fromResult) {
-    errors?.push({
-      line: lineNumber,
-      message: fromResult.error,
-    });
-
-    return;
-  }
-
-  let index = skipWhitespace(line, fromResult.nextIndex);
-
-  if (line.startsWith("->", index)) {
-    index += 2;
-  } else if (line.startsWith("--", index)) {
-    index += 2;
-
-    const arrowIndex = findArrow(line, index);
-
-    if (arrowIndex === -1) {
-      errors?.push({
-        line: lineNumber,
-        message: "Expected '->' after edge label.",
-      });
-
-      return;
-    }
-
-    const rawLabel = line.slice(index, arrowIndex);
-
-    const edgeLabel = parseEdgeLabel(rawLabel);
-
-    if (edgeLabel === null) {
-      errors?.push({
-        line: lineNumber,
-        message: "Invalid edge label.",
-      });
-
-      return;
-    }
-
-    index = arrowIndex + 2;
-
-    const toResult = parseNodeReference(line, index);
-
-    if ("error" in toResult) {
-      errors?.push({
-        line: lineNumber,
-        message: toResult.error,
-      });
-
-      return;
-    }
-
-    const afterTarget = skipWhitespace(line, toResult.nextIndex);
-
-    if (afterTarget !== line.length) {
-      errors?.push({
-        line: lineNumber,
-        message: "Unexpected content after target node.",
-      });
-
-      return;
-    }
-
-    const fromNode = getOrCreateNode(
-      fromResult.sourceId,
-      fromResult.label,
-      nodes,
-      sourceMap,
-      previousSourceMap,
-      explicitLabels,
-      lineNumber,
-      errors,
-    );
-
-    const toNode = getOrCreateNode(
-      toResult.sourceId,
-      toResult.label,
-      nodes,
-      sourceMap,
-      previousSourceMap,
-      explicitLabels,
-      lineNumber,
-      errors,
-    );
-
-    const duplicate = edges.some(
-      (edge) => edge.from === fromNode.id && edge.to === toNode.id && edge.label === edgeLabel,
-    );
-
-    if (!duplicate) {
-      edges.push({
-        id: generateEdgeId(),
-        from: fromNode.id,
-        to: toNode.id,
-        label: edgeLabel,
-      });
-    }
-
-    return;
-  } else {
-    errors?.push({
-      line: lineNumber,
-      message: "Expected '->' or '-- label ->'.",
-    });
-
-    return;
-  }
-
-  const toResult = parseNodeReference(line, index);
-
-  if ("error" in toResult) {
-    errors?.push({
-      line: lineNumber,
-      message: toResult.error,
-    });
-
-    return;
-  }
-
-  const afterTarget = skipWhitespace(line, toResult.nextIndex);
-
-  if (afterTarget !== line.length) {
-    errors?.push({
-      line: lineNumber,
-      message: "Unexpected content after target node.",
-    });
-
-    return;
-  }
-
-  const fromNode = getOrCreateNode(
-    fromResult.sourceId,
-    fromResult.label,
-    nodes,
-    sourceMap,
-    previousSourceMap,
-    explicitLabels,
-    lineNumber,
-    errors,
-  );
-
-  const toNode = getOrCreateNode(
-    toResult.sourceId,
-    toResult.label,
-    nodes,
-    sourceMap,
-    previousSourceMap,
-    explicitLabels,
-    lineNumber,
-    errors,
-  );
-
-  const duplicate = edges.some(
-    (edge) => edge.from === fromNode.id && edge.to === toNode.id && edge.label === undefined,
-  );
-
-  if (!duplicate) {
-    edges.push({
-      id: generateEdgeId(),
-      from: fromNode.id,
-      to: toNode.id,
-    });
-  }
+  from: string,
+  to: string,
+  label?: string,
+): boolean {
+  return edges.some((edge) => edge.from === from && edge.to === to && edge.label === label);
 }
 
-function calculateLevels(nodes: DiagramNode[], edges: DiagramEdge[]): Map<string, number> {
-  const levels = new Map<string, number>();
+function addParsedEdge(parsedEdge: ParsedEdge, context: ParserContext, line: number): void {
+  const from = getOrCreateNode(parsedEdge.from, context, line);
 
-  const indegree = new Map<string, number>();
+  const to = getOrCreateNode(parsedEdge.to, context, line);
 
-  const adjacency = new Map<string, string[]>();
-
-  for (const node of nodes) {
-    levels.set(node.id, 0);
-    indegree.set(node.id, 0);
-    adjacency.set(node.id, []);
+  if (edgeAlreadyExists(context.edges, from.id, to.id, parsedEdge.label)) {
+    return;
   }
 
-  for (const edge of edges) {
-    const children = adjacency.get(edge.from);
-
-    if (!children) {
-      continue;
-    }
-
-    children.push(edge.to);
-
-    indegree.set(edge.to, (indegree.get(edge.to) ?? 0) + 1);
-  }
-
-  const queue: string[] = [];
-
-  for (const node of nodes) {
-    if ((indegree.get(node.id) ?? 0) === 0) {
-      queue.push(node.id);
-    }
-  }
-
-  let index = 0;
-
-  while (index < queue.length) {
-    const nodeId = queue[index];
-    index += 1;
-
-    const currentLevel = levels.get(nodeId) ?? 0;
-
-    const children = adjacency.get(nodeId) ?? [];
-
-    for (const childId of children) {
-      const nextLevel = Math.max(levels.get(childId) ?? 0, currentLevel + 1);
-
-      levels.set(childId, nextLevel);
-
-      const nextIndegree = (indegree.get(childId) ?? 0) - 1;
-
-      indegree.set(childId, nextIndegree);
-
-      if (nextIndegree === 0) {
-        queue.push(childId);
-      }
-    }
-  }
-
-  return levels;
+  context.edges.push({
+    id: generateEdgeId(),
+    from: from.id,
+    to: to.id,
+    ...(parsedEdge.label !== undefined ? { label: parsedEdge.label } : {}),
+  });
 }
 
-function createNodeLayout(
+function createLayout(
   nodes: DiagramNode[],
   edges: DiagramEdge[],
   direction: DiagramDirection,
-  previousLayout?: DiagramLayout,
-  preservePositions = false,
-): DiagramLayout {
-  const layout: DiagramLayout = {};
+  previousDocument?: DiagramDocument,
+) {
+  const preservePositions = previousDocument?.direction === direction;
 
-  const levels = calculateLevels(nodes, edges);
+  const previousLayout = preservePositions ? (previousDocument?.layout ?? {}) : {};
 
-  const groups = new Map<number, DiagramNode[]>();
+  return createNodeLayout(nodes, edges, direction, previousLayout, preservePositions);
+}
 
-  for (const node of nodes) {
-    const level = levels.get(node.id) ?? 0;
+function parseDirection(
+  line: string,
+  lineNumber: number,
+  errors: ParseError[],
+): DiagramDirection | null {
+  const match = line.match(/^flowchart\s+(TD|LR)\s*$/);
 
-    const group = groups.get(level);
+  if (!match) {
+    errors.push(createParseError(lineNumber, 'Expected "flowchart TD" or "flowchart LR".'));
 
-    if (group) {
-      group.push(node);
-    } else {
-      groups.set(level, [node]);
-    }
+    return null;
   }
 
-  const sortedLevels = [...groups.keys()].sort((a, b) => a - b);
-
-  const levelSizes = new Map<
-    number,
-    {
-      width: number;
-      height: number;
-    }
-  >();
-
-  for (const level of sortedLevels) {
-    const group = groups.get(level) ?? [];
-
-    let width = 0;
-    let height = 0;
-
-    for (const node of group) {
-      const size = calculateNodeSize(node.label);
-
-      width = Math.max(width, size.width);
-
-      height = Math.max(height, size.height);
-    }
-
-    levelSizes.set(level, {
-      width,
-      height,
-    });
-  }
-
-  const levelOffsets = new Map<number, number>();
-
-  let accumulated = 0;
-
-  for (const level of sortedLevels) {
-    levelOffsets.set(level, accumulated);
-
-    const size = levelSizes.get(level);
-
-    if (!size) {
-      continue;
-    }
-
-    accumulated += direction === "LR" ? size.width + HORIZONTAL_GAP : size.height + VERTICAL_GAP;
-  }
-
-  for (const level of sortedLevels) {
-    const group = groups.get(level) ?? [];
-
-    const levelOffset = levelOffsets.get(level) ?? 0;
-
-    let groupOffset = 0;
-
-    for (const node of group) {
-      const size = calculateNodeSize(node.label);
-
-      const previous = previousLayout?.[node.id];
-
-      if (preservePositions && previous) {
-        layout[node.id] = {
-          ...previous,
-          width: size.width,
-          height: size.height,
-        };
-
-        continue;
-      }
-
-      if (direction === "LR") {
-        layout[node.id] = {
-          x: START_X + levelOffset,
-          y: START_Y + groupOffset,
-          width: size.width,
-          height: size.height,
-        };
-
-        groupOffset += size.height + VERTICAL_GAP;
-      } else {
-        layout[node.id] = {
-          x: START_X + groupOffset,
-          y: START_Y + levelOffset,
-          width: size.width,
-          height: size.height,
-        };
-
-        groupOffset += size.width + HORIZONTAL_GAP;
-      }
-    }
-  }
-
-  return layout;
+  return match[1] as DiagramDirection;
 }
 
 export function parseDiagram(source: string, previousDocument?: DiagramDocument): ParseResult {
-  const lines = source.split(/\r?\n/);
-
   const errors: ParseError[] = [];
 
-  let direction: DiagramDirection = "TD";
+  const lines = source.split(/\r?\n/);
 
-  const nodes = new Map<string, DiagramNode>();
+  let direction: DiagramDirection | null = null;
+  let headerFound = false;
 
-  const edges: DiagramEdge[] = [];
-
-  const sourceMap: DiagramSourceMap = {};
-
-  const explicitLabels = new Map<string, string>();
+  const context: ParserContext = {
+    direction: "LR",
+    nodes: new Map(),
+    edges: [],
+    sourceMap: {},
+    errors,
+    previousDocument,
+  };
 
   for (let index = 0; index < lines.length; index += 1) {
     const lineNumber = index + 1;
 
-    const line = lines[index].trim();
+    const rawLine = lines[index];
+    const line = rawLine.trim();
 
-    if (!line || line.startsWith("//")) {
+    if (!line) {
       continue;
     }
 
-    const directionMatch = line.match(/^flowchart\s+(TD|LR)$/);
+    if (line.startsWith("//")) {
+      continue;
+    }
 
-    if (directionMatch) {
-      direction = directionMatch[1] as DiagramDirection;
+    if (!headerFound) {
+      direction = parseDirection(line, lineNumber, errors);
+
+      if (!direction) {
+        return {
+          document: previousDocument ?? createEmptyDocument(),
+          errors,
+        };
+      }
+
+      context.direction = direction;
+      headerFound = true;
 
       continue;
     }
 
-    parseEdgeStatement(
-      line,
-      lineNumber,
-      nodes,
-      edges,
-      sourceMap,
-      previousDocument?.sourceMap,
-      explicitLabels,
-      errors,
-    );
+    const parsedEdge = parseEdgeStatement(line, lineNumber, errors);
+
+    if (!parsedEdge) {
+      continue;
+    }
+
+    addParsedEdge(parsedEdge, context, lineNumber);
   }
 
-  const nodeList = [...nodes.values()];
+  if (!headerFound) {
+    errors.push(createParseError(1, 'Missing "flowchart TD" or "flowchart LR" declaration.'));
 
-  const preservePositions = previousDocument?.direction === direction;
+    return {
+      document: previousDocument ?? createEmptyDocument(),
+      errors,
+    };
+  }
 
-  const layout = createNodeLayout(
-    nodeList,
-    edges,
-    direction,
-    previousDocument?.layout,
-    preservePositions,
-  );
+  if (context.errors.length > 0) {
+    return {
+      document: previousDocument ?? createEmptyDocument(),
+      errors: context.errors,
+    };
+  }
+
+  const nodes = Array.from(context.nodes.values());
 
   const document: DiagramDocument = {
-    direction,
-    nodes: nodeList,
-    edges,
-    layout,
-    sourceMap,
+    direction: context.direction,
+    nodes,
+    edges: context.edges,
+    layout: createLayout(nodes, context.edges, context.direction, previousDocument),
+    sourceMap: context.sourceMap,
   };
 
   return {
     document,
-    errors,
+    errors: [],
+  };
+}
+
+function createEmptyDocument(): DiagramDocument {
+  return {
+    direction: "LR",
+    nodes: [],
+    edges: [],
+    layout: {},
+    sourceMap: {},
   };
 }

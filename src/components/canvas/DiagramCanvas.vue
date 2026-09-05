@@ -1,4 +1,3 @@
-```vue
 <script setup lang="ts">
 import {
   computed,
@@ -9,7 +8,9 @@ import {
 } from 'vue'
 
 import { useEditorStore } from '@/stores/editor'
-
+import {
+  calculateLevels,
+} from '@/features/diagram/layout'
 import DiagramNode from './DiagramNode.vue'
 import DiagramEdge from './DiagramEdge.vue'
 
@@ -41,6 +42,13 @@ function releasePointerCapture(event: PointerEvent) {
     element.releasePointerCapture(event.pointerId);
   } catch {}
 }
+
+const levels = computed(() => {
+  return calculateLevels(
+    store.document.nodes,
+    store.document.edges,
+  )
+})
 
 // -----------------------------------------------------------------------------
 // Node dragging
@@ -637,6 +645,8 @@ onBeforeUnmount(() => {
           :key="edge.id"
           :edge="edge"
           :layout="store.document.layout"
+          :levels="levels"
+          :direction="store.document.direction"
         />
 
         <DiagramNode

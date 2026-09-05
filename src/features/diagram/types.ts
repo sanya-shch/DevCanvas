@@ -10,6 +10,7 @@ export interface DiagramEdge {
   from: string;
   to: string;
   label?: string;
+  routing?: "direct" | "around";
 }
 
 export interface DiagramSourceMap {

@@ -27,6 +27,13 @@ import { RouterLink } from 'vue-router'
         </RouterLink>
 
         <RouterLink
+          to="/diagrams"
+          class="nav-link"
+        >
+          Diagrams
+        </RouterLink>
+
+        <RouterLink
           to="/tutorials"
           class="nav-link"
         >

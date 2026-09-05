@@ -4,6 +4,7 @@ import AppShell from "@/components/layout/AppShell.vue";
 import HomePage from "@/pages/HomePage.vue";
 import EditorPage from "@/pages/EditorPage.vue";
 import TutorialsPage from "@/pages/TutorialsPage.vue";
+import DiagramsPage from "@/pages/DiagramsPage.vue";
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -20,6 +21,10 @@ export const router = createRouter({
         {
           path: "tutorials",
           component: TutorialsPage,
+        },
+        {
+          path: "diagrams",
+          component: DiagramsPage,
         },
       ],
     },

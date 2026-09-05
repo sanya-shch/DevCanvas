@@ -5,7 +5,10 @@ import {
   onMounted,
   watch,
 } from 'vue'
-import { useRoute } from 'vue-router'
+import {
+  useRoute,
+  useRouter,
+} from 'vue-router'
 
 import { useEditorStore } from '@/stores/editor'
 
@@ -15,6 +18,7 @@ import NodeInspector from '@/components/canvas/NodeInspector.vue'
 
 const store = useEditorStore()
 const route = useRoute()
+const router = useRouter()
 
 let parseTimeout: ReturnType<typeof setTimeout> | null = null
 
@@ -37,13 +41,17 @@ watch(
 )
 
 onMounted(async () => {
+  const id = route.query.id
   const source = route.query.source
 
-  if (typeof source === 'string') {
+  if (typeof id === 'string') {
+    await store.loadDiagram(id)
+  } else if (typeof source === 'string') {
     store.setSource(source)
+    store.parse()
+  } else {
+    store.createNewDiagram()
   }
-
-  store.parse()
 
   await nextTick()
 
@@ -172,6 +180,14 @@ function handleKeyDown(
   }
 }
 
+async function handleCreateNewDiagram() {
+  await router.replace({
+    path: '/editor',
+  })
+
+  store.createNewDiagram()
+}
+
 onMounted(() => {
   window.addEventListener(
     'keydown',
@@ -227,6 +243,23 @@ onBeforeUnmount(() => {
           @click="store.redo"
         >
           Redo
+        </button>
+
+        <button
+          type="button"
+          class="header-button"
+          :disabled="store.isSaving"
+          @click="store.saveDiagram"
+        >
+          {{ store.isSaving ? 'Saving...' : 'Save' }}
+        </button>
+
+        <button
+          type="button"
+          class="header-button"
+          @click="handleCreateNewDiagram"
+        >
+          New
         </button>
 
         <button

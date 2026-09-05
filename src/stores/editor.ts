@@ -5,8 +5,16 @@ import { parseDiagram } from "@/features/diagram/parser";
 import { serializeDiagram } from "@/features/diagram/serializer";
 import { calculateNodeSize } from "@/features/diagram/nodeSizing";
 import { History } from "@/features/diagram/history";
+import { useDiagramsStore } from "./diagrams";
+import { generateDiagramId } from "@/features/diagrams/diagramStorage";
 
-import type { DiagramDocument, ParseError } from "@/features/diagram/types";
+import type {
+  DiagramDocument,
+  DiagramLayout,
+  DiagramSourceMap,
+  ParseError,
+} from "@/features/diagram/types";
+import type { SavedDiagram } from "@/features/diagrams/types";
 
 const INITIAL_SOURCE = `flowchart LR
 
@@ -23,6 +31,124 @@ const MAX_ZOOM = 2;
 const HISTORY_LIMIT = 100;
 
 export const useEditorStore = defineStore("editor", () => {
+  const diagramId = ref<string | null>(null);
+  const diagramTitle = ref("Untitled Diagram");
+  const isSaving = ref(false);
+  const lastSavedAt = ref<number | null>(null);
+
+  const diagramsStore = useDiagramsStore();
+
+  function createNewDiagram(title = "Untitled Diagram") {
+    diagramId.value = null;
+    diagramTitle.value = title;
+    lastSavedAt.value = null;
+
+    source.value = `flowchart LR
+
+A["Start"] -> B["End"]
+`;
+
+    document.value = {
+      direction: "LR",
+      nodes: [],
+      edges: [],
+      layout: {},
+      sourceMap: {},
+    };
+
+    selectedNodeId.value = null;
+
+    history.clear();
+    notifyHistoryChange();
+
+    parse();
+  }
+
+  async function saveDiagram() {
+    if (isSaving.value) {
+      return;
+    }
+
+    isSaving.value = true;
+
+    try {
+      const now = Date.now();
+      const id = diagramId.value ?? generateDiagramId();
+
+      const existing = diagramId.value ? await diagramsStore.getById(id) : undefined;
+
+      const diagram: SavedDiagram = {
+        id,
+        title: diagramTitle.value,
+        source: source.value,
+        direction: document.value.direction,
+        sourceMap: cloneSourceMap(document.value.sourceMap),
+        layout: cloneLayout(document.value.layout),
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      };
+
+      await diagramsStore.saveDiagram(diagram);
+
+      diagramId.value = id;
+      lastSavedAt.value = now;
+    } finally {
+      isSaving.value = false;
+    }
+  }
+
+  function cloneLayout(layout: DiagramLayout): DiagramLayout {
+    return Object.fromEntries(
+      Object.entries(layout).map(([nodeId, value]) => [nodeId, { ...value }]),
+    );
+  }
+
+  async function loadDiagram(id: string) {
+    const saved = await diagramsStore.getById(id);
+
+    if (!saved) {
+      return false;
+    }
+
+    diagramId.value = saved.id;
+    diagramTitle.value = saved.title;
+
+    source.value = saved.source;
+
+    const previousDocument: DiagramDocument = {
+      direction: saved.direction,
+      nodes: [],
+      edges: [],
+      layout: cloneLayout(saved.layout),
+      sourceMap: cloneSourceMap(saved.sourceMap),
+    };
+
+    const result = parseDiagram(saved.source, previousDocument);
+
+    if (result.errors.length > 0) {
+      errors.value = result.errors;
+      return false;
+    }
+
+    document.value = result.document;
+
+    errors.value = [];
+    selectedNodeId.value = null;
+
+    history.clear();
+    notifyHistoryChange();
+
+    lastSavedAt.value = saved.updatedAt;
+
+    return true;
+  }
+
+  function cloneSourceMap(sourceMap: DiagramSourceMap): DiagramSourceMap {
+    return {
+      ...sourceMap,
+    };
+  }
+
   // ---------------------------------------------------------------------------
   // Document
   // ---------------------------------------------------------------------------
@@ -472,5 +598,14 @@ export const useEditorStore = defineStore("editor", () => {
     redo,
     beginHistoryTransaction,
     endHistoryTransaction,
+
+    diagramId,
+    diagramTitle,
+    isSaving,
+    lastSavedAt,
+
+    createNewDiagram,
+    saveDiagram,
+    loadDiagram,
   };
 });
