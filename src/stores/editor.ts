@@ -1,4 +1,4 @@
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { defineStore } from "pinia";
 
 import { parseDiagram } from "@/features/diagram/parser";
@@ -30,18 +30,63 @@ const MAX_ZOOM = 2;
 
 const HISTORY_LIMIT = 100;
 
+const AUTOSAVE_DELAY = 1200;
+
 export const useEditorStore = defineStore("editor", () => {
+  // ---------------------------------------------------------------------------
+  // Persistence
+  // ---------------------------------------------------------------------------
+
   const diagramId = ref<string | null>(null);
   const diagramTitle = ref("Untitled Diagram");
+
   const isSaving = ref(false);
   const lastSavedAt = ref<number | null>(null);
 
+  const isDirty = ref(false);
+  const autosaveError = ref<string | null>(null);
+
   const diagramsStore = useDiagramsStore();
+
+  let autosaveTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  let changeVersion = 0;
+  let saveQueued = false;
+  let isHydrating = false;
+
+  function markDirty() {
+    changeVersion += 1;
+    isDirty.value = true;
+    autosaveError.value = null;
+
+    scheduleAutosave();
+  }
+
+  function scheduleAutosave() {
+    if (autosaveTimeout !== null) {
+      clearTimeout(autosaveTimeout);
+    }
+
+    autosaveTimeout = setTimeout(() => {
+      autosaveTimeout = null;
+
+      if (!isDirty.value) {
+        return;
+      }
+
+      void saveDiagram();
+    }, AUTOSAVE_DELAY);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Create new diagram
+  // ---------------------------------------------------------------------------
 
   function createNewDiagram(title = "Untitled Diagram") {
     diagramId.value = null;
     diagramTitle.value = title;
     lastSavedAt.value = null;
+    autosaveError.value = null;
 
     source.value = `flowchart LR
 
@@ -62,14 +107,24 @@ A["Start"] -> B["End"]
     notifyHistoryChange();
 
     parse();
+
+    markDirty();
   }
+
+  // ---------------------------------------------------------------------------
+  // Save
+  // ---------------------------------------------------------------------------
 
   async function saveDiagram() {
     if (isSaving.value) {
+      saveQueued = true;
       return;
     }
 
     isSaving.value = true;
+    autosaveError.value = null;
+
+    const versionAtStart = changeVersion;
 
     try {
       const now = Date.now();
@@ -92,15 +147,40 @@ A["Start"] -> B["End"]
 
       diagramId.value = id;
       lastSavedAt.value = now;
+
+      if (changeVersion === versionAtStart) {
+        isDirty.value = false;
+      }
+    } catch (error) {
+      console.error("Failed to save diagram:", error);
+      autosaveError.value = "Failed to save diagram.";
     } finally {
       isSaving.value = false;
+
+      if (saveQueued) {
+        saveQueued = false;
+
+        if (isDirty.value) {
+          scheduleAutosave();
+        }
+      }
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // Persistence helpers
+  // ---------------------------------------------------------------------------
 
   function cloneLayout(layout: DiagramLayout): DiagramLayout {
     return Object.fromEntries(
       Object.entries(layout).map(([nodeId, value]) => [nodeId, { ...value }]),
     );
+  }
+
+  function cloneSourceMap(sourceMap: DiagramSourceMap): DiagramSourceMap {
+    return {
+      ...sourceMap,
+    };
   }
 
   async function loadDiagram(id: string) {
@@ -110,43 +190,45 @@ A["Start"] -> B["End"]
       return false;
     }
 
-    diagramId.value = saved.id;
-    diagramTitle.value = saved.title;
+    isHydrating = true;
 
-    source.value = saved.source;
+    try {
+      diagramId.value = saved.id;
+      diagramTitle.value = saved.title;
 
-    const previousDocument: DiagramDocument = {
-      direction: saved.direction,
-      nodes: [],
-      edges: [],
-      layout: cloneLayout(saved.layout),
-      sourceMap: cloneSourceMap(saved.sourceMap),
-    };
+      source.value = saved.source;
 
-    const result = parseDiagram(saved.source, previousDocument);
+      const previousDocument: DiagramDocument = {
+        direction: saved.direction,
+        nodes: [],
+        edges: [],
+        layout: cloneLayout(saved.layout),
+        sourceMap: cloneSourceMap(saved.sourceMap),
+      };
 
-    if (result.errors.length > 0) {
-      errors.value = result.errors;
-      return false;
+      const result = parseDiagram(saved.source, previousDocument);
+
+      if (result.errors.length > 0) {
+        errors.value = result.errors;
+        return false;
+      }
+
+      document.value = result.document;
+
+      errors.value = [];
+      selectedNodeId.value = null;
+
+      history.clear();
+      notifyHistoryChange();
+
+      lastSavedAt.value = saved.updatedAt;
+      isDirty.value = false;
+      autosaveError.value = null;
+
+      return true;
+    } finally {
+      isHydrating = false;
     }
-
-    document.value = result.document;
-
-    errors.value = [];
-    selectedNodeId.value = null;
-
-    history.clear();
-    notifyHistoryChange();
-
-    lastSavedAt.value = saved.updatedAt;
-
-    return true;
-  }
-
-  function cloneSourceMap(sourceMap: DiagramSourceMap): DiagramSourceMap {
-    return {
-      ...sourceMap,
-    };
   }
 
   // ---------------------------------------------------------------------------
@@ -164,6 +246,14 @@ A["Start"] -> B["End"]
   });
 
   const errors = ref<ParseError[]>([]);
+
+  watch(source, () => {
+    if (isHydrating) {
+      return;
+    }
+
+    markDirty();
+  });
 
   // ---------------------------------------------------------------------------
   // Viewport
@@ -219,6 +309,7 @@ A["Start"] -> B["End"]
     notifyHistoryChange();
 
     updateSourceFromDocument();
+    markDirty();
   }
 
   let historyTransaction: DiagramDocument | null = null;
@@ -246,6 +337,7 @@ A["Start"] -> B["End"]
 
     history.push(previousDocument);
     notifyHistoryChange();
+    markDirty();
   }
 
   // ---------------------------------------------------------------------------
@@ -359,6 +451,7 @@ A["Start"] -> B["End"]
     const maxY = Math.max(...layouts.map((layout) => layout.y + layout.height));
 
     const contentWidth = maxX - minX;
+
     const contentHeight = maxY - minY;
 
     if (contentWidth <= 0 || contentHeight <= 0) {
@@ -371,6 +464,7 @@ A["Start"] -> B["End"]
     const availableHeight = Math.max(height - padding * 2, 1);
 
     const scaleX = availableWidth / contentWidth;
+
     const scaleY = availableHeight / contentHeight;
 
     const newZoom = Math.min(scaleX, scaleY, MAX_ZOOM);
@@ -378,6 +472,7 @@ A["Start"] -> B["End"]
     setZoom(Math.max(MIN_ZOOM, newZoom));
 
     const scaledWidth = contentWidth * zoom.value;
+
     const scaledHeight = contentHeight * zoom.value;
 
     offset.value = {
@@ -403,6 +498,10 @@ A["Start"] -> B["End"]
     const currentLayout = document.value.layout[nodeId];
 
     if (!currentLayout) {
+      return;
+    }
+
+    if (currentLayout.x === x && currentLayout.y === y) {
       return;
     }
 
@@ -484,6 +583,7 @@ A["Start"] -> B["End"]
 
   function undo() {
     const currentDocument = cloneDocument(document.value);
+
     const previousDocument = history.undo(currentDocument);
 
     if (!previousDocument) {
@@ -494,6 +594,7 @@ A["Start"] -> B["End"]
 
     updateSourceFromDocument();
     notifyHistoryChange();
+    markDirty();
 
     if (
       selectedNodeId.value &&
@@ -507,6 +608,7 @@ A["Start"] -> B["End"]
 
   function redo() {
     const currentDocument = cloneDocument(document.value);
+
     const nextDocument = history.redo(currentDocument);
 
     if (!nextDocument) {
@@ -517,6 +619,7 @@ A["Start"] -> B["End"]
 
     updateSourceFromDocument();
     notifyHistoryChange();
+    markDirty();
 
     if (
       selectedNodeId.value &&
@@ -599,9 +702,12 @@ A["Start"] -> B["End"]
     beginHistoryTransaction,
     endHistoryTransaction,
 
+    // persistence
     diagramId,
     diagramTitle,
     isSaving,
+    isDirty,
+    autosaveError,
     lastSavedAt,
 
     createNewDiagram,

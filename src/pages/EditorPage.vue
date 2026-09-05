@@ -40,6 +40,22 @@ watch(
   },
 )
 
+watch(
+  () => store.diagramId,
+  (id) => {
+    if (!id || route.query.id === id) {
+      return
+    }
+
+    void router.replace({
+      query: {
+        ...route.query,
+        id,
+      },
+    })
+  },
+)
+
 onMounted(async () => {
   const id = route.query.id
   const source = route.query.source
@@ -245,13 +261,43 @@ onBeforeUnmount(() => {
           Redo
         </button>
 
+        <div class="save-status">
+          <span
+            v-if="store.autosaveError"
+            class="save-status__error"
+          >
+            {{ store.autosaveError }}
+          </span>
+
+          <span
+            v-else-if="store.isSaving"
+            class="save-status__saving"
+          >
+            Saving...
+          </span>
+
+          <span
+            v-else-if="store.isDirty"
+            class="save-status__dirty"
+          >
+            Unsaved changes
+          </span>
+
+          <span
+            v-else-if="store.lastSavedAt"
+            class="save-status__saved"
+          >
+            Saved
+          </span>
+        </div>
+
         <button
           type="button"
           class="header-button"
-          :disabled="store.isSaving"
+          :disabled="store.isSaving || !store.isDirty"
           @click="store.saveDiagram"
         >
-          {{ store.isSaving ? 'Saving...' : 'Save' }}
+          Save
         </button>
 
         <button
@@ -623,6 +669,33 @@ onBeforeUnmount(() => {
 .header-button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.save-status {
+  display: inline-flex;
+  align-items: center;
+  min-width: 110px;
+
+  color: var(--text-secondary);
+
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.save-status__saving {
+  color: var(--text-secondary);
+}
+
+.save-status__dirty {
+  color: var(--text-secondary);
+}
+
+.save-status__saved {
+  color: var(--success-color);
+}
+
+.save-status__error {
+  color: var(--error-color);
 }
 
 @media (max-width: 1100px) {

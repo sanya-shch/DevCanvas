@@ -1,8 +1,22 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 
 import { useEditorStore } from "./editor";
 import { calculateNodeSize } from "@/features/diagram/nodeSizing";
+
+const saveDiagramMock = vi.fn();
+const getByIdMock = vi.fn();
+
+vi.mock("./diagrams", () => ({
+  useDiagramsStore: () => ({
+    saveDiagram: saveDiagramMock,
+    getById: getByIdMock,
+  }),
+}));
+
+vi.mock("@/features/diagrams/diagramStorage", () => ({
+  generateDiagramId: () => "diagram_test_123",
+}));
 
 describe("editor store", () => {
   beforeEach(() => {
@@ -831,5 +845,191 @@ A -> B
         y: 0,
       });
     });
+  });
+});
+
+describe("useEditorStore autosave", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+
+    vi.clearAllMocks();
+
+    getByIdMock.mockResolvedValue(null);
+    saveDiagramMock.mockResolvedValue(undefined);
+
+    setActivePinia(createPinia());
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("autosaves after the debounce delay", async () => {
+    const store = useEditorStore();
+
+    store.source = `${store.source}\nA -> C`;
+
+    expect(saveDiagramMock).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1199);
+
+    expect(saveDiagramMock).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(saveDiagramMock).toHaveBeenCalledTimes(1);
+    expect(store.diagramId).toBe("diagram_test_123");
+    expect(store.isDirty).toBe(false);
+    expect(store.isSaving).toBe(false);
+    expect(store.lastSavedAt).not.toBeNull();
+  });
+
+  it("debounces multiple source changes into a single save", async () => {
+    const store = useEditorStore();
+
+    store.source = `${store.source}\nA -> C`;
+
+    await vi.advanceTimersByTimeAsync(500);
+
+    store.source = `${store.source}\nC -> D`;
+
+    await vi.advanceTimersByTimeAsync(500);
+
+    store.source = `${store.source}\nD -> E`;
+
+    expect(saveDiagramMock).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1199);
+
+    expect(saveDiagramMock).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(saveDiagramMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not mark the diagram dirty when loading a saved diagram", async () => {
+    getByIdMock.mockResolvedValue({
+      id: "diagram_existing",
+      title: "Existing Diagram",
+      source: `flowchart LR
+
+A -> B
+`,
+      direction: "LR",
+      sourceMap: {},
+      layout: {
+        A: {
+          x: 0,
+          y: 0,
+          width: 120,
+          height: 50,
+        },
+        B: {
+          x: 200,
+          y: 0,
+          width: 120,
+          height: 50,
+        },
+      },
+      createdAt: 1000,
+      updatedAt: 2000,
+    });
+
+    const store = useEditorStore();
+
+    const loaded = await store.loadDiagram("diagram_existing");
+
+    expect(loaded).toBe(true);
+    expect(store.diagramId).toBe("diagram_existing");
+    expect(store.lastSavedAt).toBe(2000);
+    expect(saveDiagramMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps the diagram dirty when a change happens during saving", async () => {
+    let resolveSave!: () => void;
+
+    saveDiagramMock.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSave = resolve;
+        }),
+    );
+
+    const store = useEditorStore();
+
+    store.source = `${store.source}\nA -> C`;
+
+    await vi.advanceTimersByTimeAsync(1200);
+
+    expect(store.isSaving).toBe(true);
+
+    store.source = `${store.source}\nC -> D`;
+
+    expect(store.isDirty).toBe(true);
+
+    resolveSave();
+
+    await vi.runAllTimersAsync();
+
+    expect(store.isDirty).toBe(true);
+  });
+
+  it("autosaves changes made after an in-progress save", async () => {
+    let resolveFirstSave!: () => void;
+
+    saveDiagramMock
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveFirstSave = resolve;
+          }),
+      )
+      .mockResolvedValue(undefined);
+
+    const store = useEditorStore();
+
+    store.source = `${store.source}\nA -> C`;
+
+    await vi.advanceTimersByTimeAsync(1200);
+
+    expect(saveDiagramMock).toHaveBeenCalledTimes(1);
+    expect(store.isSaving).toBe(true);
+
+    store.source = `${store.source}\nC -> D`;
+
+    resolveFirstSave();
+
+    await vi.runAllTimersAsync();
+
+    expect(saveDiagramMock).toHaveBeenCalledTimes(2);
+    expect(store.isDirty).toBe(false);
+  });
+
+  it("marks the diagram dirty after undo", async () => {
+    const store = useEditorStore();
+
+    store.source = `flowchart LR
+
+A -> B
+`;
+
+    store.parse();
+
+    const nodeId = store.document.nodes[0]?.id;
+
+    expect(nodeId).toBeDefined();
+
+    store.updateNodeLabel(nodeId!, "Updated");
+
+    expect(store.isDirty).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(1200);
+
+    expect(store.isDirty).toBe(false);
+
+    store.undo();
+
+    expect(store.isDirty).toBe(true);
   });
 });
