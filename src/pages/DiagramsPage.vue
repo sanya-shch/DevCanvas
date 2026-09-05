@@ -143,7 +143,7 @@ function formatDate(timestamp: number) {
 
 .diagrams-header p {
   margin: 0;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .new-diagram-button {
@@ -165,11 +165,11 @@ function formatDate(timestamp: number) {
 }
 
 .diagrams-state p {
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .diagrams-state--error {
-  color: #b42318;
+  color: var(--error-color);
 }
 
 .diagram-grid {
@@ -182,9 +182,11 @@ function formatDate(timestamp: number) {
 .diagram-card {
   position: relative;
   min-height: 140px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   overflow: hidden;
+  background: var(--panel-background);
+  box-shadow: var(--panel-shadow);
 }
 
 .diagram-card__content {
@@ -205,7 +207,7 @@ function formatDate(timestamp: number) {
 
 .diagram-card__content p {
   margin: 0;
-  color: #666;
+  color: var(--text-secondary);
   font-size: 14px;
 }
 
@@ -215,7 +217,7 @@ function formatDate(timestamp: number) {
   bottom: 12px;
   border: 0;
   background: transparent;
-  color: #b42318;
+  color: var(--danger-color);
   cursor: pointer;
 }
 </style>

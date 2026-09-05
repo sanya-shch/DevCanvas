@@ -6,12 +6,21 @@ import {
   watch,
 } from 'vue'
 
+import { storeToRefs } from 'pinia'
+
 import * as monaco from 'monaco-editor'
 
 import {
   DEV_CANVAS_LANGUAGE,
   registerDevCanvasLanguage,
 } from './devcanvasLanguage'
+
+import {
+  MONACO_THEMES,
+  registerMonacoThemes,
+} from '@/features/theme/monacoThemes'
+
+import { useThemeStore } from '@/stores/theme'
 
 const props = defineProps<{
   modelValue: string
@@ -29,12 +38,16 @@ let editor:
 
 const rootRef = ref<HTMLElement | null>(null)
 
+const themeStore = useThemeStore()
+const { theme } = storeToRefs(themeStore)
+
 onMounted(() => {
   if (!rootRef.value) {
     return
   }
 
   registerDevCanvasLanguage()
+  registerMonacoThemes()
 
   editor =
     monaco.editor.create(
@@ -45,7 +58,7 @@ onMounted(() => {
         language:
           DEV_CANVAS_LANGUAGE,
 
-        theme: 'vs-dark',
+        theme: MONACO_THEMES[theme.value],
 
         automaticLayout: true,
 
@@ -96,6 +109,15 @@ watch(
     }
 
     editor.setValue(value)
+  },
+)
+
+watch(
+  theme,
+  (value) => {
+    monaco.editor.setTheme(
+      MONACO_THEMES[value],
+    )
   },
 )
 

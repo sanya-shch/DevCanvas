@@ -1,4 +1,5 @@
-:root {
+:root,
+:root[data-theme="dark"] {
   --app-background: #0b0d10;
   --panel-background: #11151a;
   --input-background: #0d1117;
@@ -33,6 +34,76 @@
   --panel-shadow: 0 4px 16px rgb(0 0 0 / 20%);
 }
 
+:root[data-theme="light"] {
+  --app-background: #f6f8fa;
+  --panel-background: #ffffff;
+  --input-background: #f6f8fa;
+  --hover-background: #eef1f4;
+
+  --border-color: #d0d7de;
+
+  --text-primary: #1f2328;
+  --text-secondary: #656d76;
+
+  --accent-color: #6d28d9;
+  --accent-color-alpha: rgb(109 40 217 / 12%);
+  --accent-contrast-color: #ffffff;
+
+  --canvas-background: #ffffff;
+  --grid-color: #e1e4e8;
+
+  --node-bg: #ffffff;
+  --node-border: #8c959f;
+  --edge-color: #57606a;
+
+  --success-color: #1a7f37;
+
+  --error-color: #cf222e;
+  --error-border: #ff818266;
+  --error-background: #ffebe9;
+
+  --danger-color: #cf222e;
+  --danger-border: #ff818266;
+  --danger-background: #ffebe9;
+
+  --panel-shadow: 0 4px 16px rgb(31 35 40 / 12%);
+}
+
+:root[data-theme="midnight"] {
+  --app-background: #080b14;
+  --panel-background: #0d1220;
+  --input-background: #0a0f1b;
+  --hover-background: #151c2d;
+
+  --border-color: #202a40;
+
+  --text-primary: #e5e9f2;
+  --text-secondary: #8b96ad;
+
+  --accent-color: #8b5cf6;
+  --accent-color-alpha: rgb(139 92 246 / 20%);
+  --accent-contrast-color: #ffffff;
+
+  --canvas-background: #0a0f1b;
+  --grid-color: #202a40;
+
+  --node-bg: #111827;
+  --node-border: #46516a;
+  --edge-color: #8792aa;
+
+  --success-color: #4ade80;
+
+  --error-color: #f87171;
+  --error-border: #7f1d1d;
+  --error-background: #2a1215;
+
+  --danger-color: #f87171;
+  --danger-border: #7f1d1d;
+  --danger-background: #2a1215;
+
+  --panel-shadow: 0 4px 20px rgb(0 0 0 / 30%);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -46,7 +117,7 @@ body,
 }
 
 body {
-  background: var(--background);
+  background: var(--app-background);
   color: var(--text-primary);
 }
 
@@ -54,4 +125,15 @@ button,
 input,
 textarea {
   font: inherit;
+}
+
+body,
+button,
+input,
+textarea,
+select {
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease;
 }

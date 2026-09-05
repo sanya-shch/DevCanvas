@@ -15,6 +15,7 @@ import { useEditorStore } from '@/stores/editor'
 import CodeEditor from '@/components/editor/CodeEditor.vue'
 import DiagramCanvas from '@/components/canvas/DiagramCanvas.vue'
 import NodeInspector from '@/components/canvas/NodeInspector.vue'
+import ThemeSwitcher from '@/components/theme/ThemeSwitcher.vue'
 
 const store = useEditorStore()
 const route = useRoute()
@@ -325,6 +326,8 @@ onBeforeUnmount(() => {
         >
           Reset view
         </button>
+
+        <ThemeSwitcher />
       </div>
     </header>
 
