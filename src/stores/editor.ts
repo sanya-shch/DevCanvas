@@ -687,14 +687,18 @@ A["Start"] -> B["End"]
 
   // ---
 
-  function loadDocument(nextDocument: DiagramDocument, title = "Shared Diagram") {
+  function loadDocument(
+    nextDocument: DiagramDocument,
+    title = "Untitled Diagram",
+    nextSource?: string,
+  ) {
     diagramId.value = null;
     diagramTitle.value = title;
     lastSavedAt.value = null;
 
     document.value = cloneDocument(nextDocument);
 
-    source.value = serializeDiagram(document.value);
+    source.value = nextSource ?? serializeDiagram(document.value);
 
     errors.value = [];
     selectedNodeId.value = null;

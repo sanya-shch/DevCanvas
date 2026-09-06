@@ -22,6 +22,12 @@ import { downloadSvg } from '@/features/diagram/svgDownload'
 import { downloadPng } from "@/features/diagram/pngDownload";
 import { useThemeStore } from '@/stores/theme'
 import { createShareUrl, getSharedDocument } from '@/features/share/shareUrl'
+import {
+  createDevCanvasFile,
+  serializeDevCanvasFile,
+  parseDevCanvasFile,
+} from "@/features/file/devcanvasFile";
+import { downloadDevCanvasFile } from "@/features/file/devcanvasFileDownload";
 
 const store = useEditorStore()
 const themeStore = useThemeStore();
@@ -218,9 +224,87 @@ function sanitizeFilename(
 ): string {
   return value
     .trim()
-    .replace(/[<>:"/\\|?*]+/g, '-')
-    .replace(/\s+/g, '-')
-    || 'diagram'
+    .replace(
+      /[<>:"/\\|?*]+/g,
+      "-",
+    )
+    .replace(
+      /\s+/g,
+      "-",
+    )
+    || "diagram";
+}
+
+function handleExportDevCanvas() {
+  if (
+    store.hasErrors ||
+    !store.document.nodes.length
+  ) {
+    return;
+  }
+
+  const file =
+    createDevCanvasFile(
+      store.diagramTitle,
+      store.source,
+      store.document,
+    );
+
+  const content =
+    serializeDevCanvasFile(file);
+
+  downloadDevCanvasFile(
+    content,
+    `${sanitizeFilename(
+      store.diagramTitle,
+    )}.devcanvas`,
+  );
+}
+
+async function handleImportDevCanvas() {
+  const input =
+    document.createElement("input");
+
+  input.type = "file";
+  input.accept = ".devcanvas,application/json";
+
+  const file =
+    await new Promise<File | null>(
+      (resolve) => {
+        input.onchange = () => {
+          resolve(
+            input.files?.[0] ?? null,
+          );
+        };
+
+        input.click();
+      },
+    );
+
+  if (!file) {
+    return;
+  }
+
+  try {
+    const content =
+      await file.text();
+
+    const imported =
+      parseDevCanvasFile(content);
+
+    store.loadDocument(
+      imported.document,
+      imported.title,
+      imported.source,
+    );
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to import .devcanvas file";
+
+    window.alert(message);
+  }
 }
 
 function handleExportSvg() {
@@ -474,6 +558,26 @@ onBeforeUnmount(() => {
           @click="handleExportPng"
         >
           Export PNG
+        </button>
+
+        <button
+          type="button"
+          class="header-button"
+          :disabled="
+            store.hasErrors ||
+            !store.document.nodes.length
+          "
+          @click="handleExportDevCanvas"
+        >
+          Export
+        </button>
+
+        <button
+          type="button"
+          class="header-button"
+          @click="handleImportDevCanvas"
+        >
+          Import
         </button>
 
         <button
