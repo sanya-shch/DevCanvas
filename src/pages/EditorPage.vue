@@ -12,7 +12,6 @@ import {
 } from 'vue-router'
 
 import { useEditorStore } from '@/stores/editor'
-
 import CodeEditor from '@/components/editor/CodeEditor.vue'
 import DiagramCanvas from '@/components/canvas/DiagramCanvas.vue'
 import NodeInspector from '@/components/canvas/NodeInspector.vue'
@@ -28,12 +27,18 @@ import {
   parseDevCanvasFile,
 } from "@/features/file/devcanvasFile";
 import { downloadDevCanvasFile } from "@/features/file/devcanvasFileDownload";
+import DraftRecoveryDialog from "@/features/drafts/components/DraftRecoveryDialog.vue";
+
+import type { DiagramDraft } from "@/features/drafts/types";
 
 const store = useEditorStore()
 const themeStore = useThemeStore();
 
 const route = useRoute()
 const router = useRouter()
+
+const recoveryDraft = ref<DiagramDraft | null>(null);
+const isRecoveringDraft = ref(false);
 
 let parseTimeout: ReturnType<typeof setTimeout> | null = null
 
@@ -430,36 +435,114 @@ function handleBeforeUnload(event: BeforeUnloadEvent) {
   event.returnValue = ''
 }
 
-onMounted(async () => {
-    const sharedDocument = getSharedDocument();
+async function checkForRecoveryDraft(
+  diagramId: string | null,
+) {
+  const draft = await store.findRecoveryDraft(diagramId);
 
-    const id = route.query.id;
-    const source = route.query.source;
+  if (!draft) {
+    return;
+  }
 
-    if (sharedDocument) {
-      store.loadDocument(
-        sharedDocument,
-        "Shared Diagram",
-      );
-    } else if (typeof id === "string") {
-      await store.loadDiagram(id);
-    } else if (typeof source === "string") {
-      store.setSource(source);
-      store.parse();
-    } else {
-      store.createNewDiagram();
+  recoveryDraft.value = draft;
+}
+
+async function handleRecoverDraft() {
+  const draft = recoveryDraft.value;
+
+  if (!draft || isRecoveringDraft.value) {
+    return;
+  }
+
+  isRecoveringDraft.value = true;
+
+  try {
+    const recovered = await store.recoverDraft(draft);
+
+    if (recovered) {
+      recoveryDraft.value = null;
+
+      await nextTick();
+
+      requestAnimationFrame(() => {
+        const canvas = document.querySelector(
+          ".diagram-canvas",
+        );
+
+        if (!(canvas instanceof HTMLElement)) {
+          return;
+        }
+
+        store.fitToScreen(
+          canvas.clientWidth,
+          canvas.clientHeight,
+        );
+      });
     }
+  } finally {
+    isRecoveringDraft.value = false;
+  }
+}
+
+async function handleDiscardDraft() {
+  const draft = recoveryDraft.value;
+
+  if (!draft) {
+    return;
+  }
+
+  const discarded = await store.discardDraft(draft);
+
+  if (discarded) {
+    recoveryDraft.value = null;
+  }
+}
+
+onMounted(async () => {
+  const sharedDocument = getSharedDocument();
+
+  const id = route.query.id;
+  const source = route.query.source;
+
+  if (sharedDocument) {
+    store.loadDocument(
+      sharedDocument,
+      "Shared Diagram",
+    );
+  } else if (typeof id === "string") {
+    await store.loadDiagram(id);
+  } else if (typeof source === "string") {
+    store.setSource(source);
+    store.parse();
+  } else {
+    store.createNewDiagram();
+  }
+
+  /*
+   * Shared/source URLs represent an external document,
+   * not a normal editor session.
+   */
+  if (!sharedDocument && typeof source !== "string") {
+    const recoveryDiagramId =
+      typeof id === "string"
+        ? id
+        : null;
+
+    await checkForRecoveryDraft(
+      recoveryDiagramId,
+    );
+  }
 
   window.addEventListener(
-    'keydown',
+    "keydown",
     handleKeyDown,
   );
 
   window.addEventListener(
-    'beforeunload',
+    "beforeunload",
     handleBeforeUnload,
   );
-})
+});
 
 onBeforeUnmount(() => {
   if (shareCopiedTimeout !== null) {
@@ -484,6 +567,13 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <DraftRecoveryDialog
+    v-if="recoveryDraft"
+    :draft="recoveryDraft"
+    @recover="handleRecoverDraft"
+    @discard="handleDiscardDraft"
+  />
+
   <main class="editor-page">
     <header class="editor-header">
       <RouterLink

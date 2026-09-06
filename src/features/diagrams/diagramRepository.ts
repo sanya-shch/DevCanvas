@@ -1,46 +1,14 @@
+import { DIAGRAMS_STORE, openDatabase } from "@/features/storage/database";
+
 import type { SavedDiagram } from "./types";
-
-const DB_NAME = "devcanvas";
-const DB_VERSION = 1;
-const STORE_NAME = "diagrams";
-
-function openDatabase(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onerror = () => {
-      reject(request.error);
-    };
-
-    request.onsuccess = () => {
-      resolve(request.result);
-    };
-
-    request.onupgradeneeded = () => {
-      const database = request.result;
-
-      if (database.objectStoreNames.contains(STORE_NAME)) {
-        return;
-      }
-
-      const store = database.createObjectStore(STORE_NAME, {
-        keyPath: "id",
-      });
-
-      store.createIndex("updatedAt", "updatedAt", {
-        unique: false,
-      });
-    };
-  });
-}
 
 export async function getAllDiagrams(): Promise<SavedDiagram[]> {
   const database = await openDatabase();
 
   return new Promise((resolve, reject) => {
-    const transaction = database.transaction(STORE_NAME, "readonly");
+    const transaction = database.transaction(DIAGRAMS_STORE, "readonly");
 
-    const store = transaction.objectStore(STORE_NAME);
+    const store = transaction.objectStore(DIAGRAMS_STORE);
 
     const request = store.getAll();
 
@@ -66,9 +34,9 @@ export async function getDiagram(id: string): Promise<SavedDiagram | null> {
   const database = await openDatabase();
 
   return new Promise((resolve, reject) => {
-    const transaction = database.transaction(STORE_NAME, "readonly");
+    const transaction = database.transaction(DIAGRAMS_STORE, "readonly");
 
-    const store = transaction.objectStore(STORE_NAME);
+    const store = transaction.objectStore(DIAGRAMS_STORE);
 
     const request = store.get(id);
 
@@ -90,9 +58,9 @@ export async function saveDiagram(diagram: SavedDiagram): Promise<void> {
   const database = await openDatabase();
 
   return new Promise((resolve, reject) => {
-    const transaction = database.transaction(STORE_NAME, "readwrite");
+    const transaction = database.transaction(DIAGRAMS_STORE, "readwrite");
 
-    const store = transaction.objectStore(STORE_NAME);
+    const store = transaction.objectStore(DIAGRAMS_STORE);
 
     store.put(diagram);
 
@@ -111,9 +79,9 @@ export async function deleteDiagram(id: string): Promise<void> {
   const database = await openDatabase();
 
   return new Promise((resolve, reject) => {
-    const transaction = database.transaction(STORE_NAME, "readwrite");
+    const transaction = database.transaction(DIAGRAMS_STORE, "readwrite");
 
-    const store = transaction.objectStore(STORE_NAME);
+    const store = transaction.objectStore(DIAGRAMS_STORE);
 
     store.delete(id);
 

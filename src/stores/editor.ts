@@ -7,7 +7,14 @@ import { calculateNodeSize } from "@/features/diagram/nodeSizing";
 import { History } from "@/features/diagram/history";
 import { useDiagramsStore } from "./diagrams";
 import { generateDiagramId } from "@/features/diagrams/diagramStorage";
+import {
+  deleteDraft,
+  getAllDrafts,
+  saveDraft as saveDraftToStorage,
+} from "@/features/drafts/draftRepository";
+import { generateDraftId } from "@/features/drafts/draftStorage";
 
+import type { DiagramDraft } from "@/features/drafts/types";
 import type {
   DiagramDocument,
   DiagramLayout,
@@ -50,10 +57,155 @@ export const useEditorStore = defineStore("editor", () => {
   const diagramsStore = useDiagramsStore();
 
   let autosaveTimeout: ReturnType<typeof setTimeout> | null = null;
+  let draftSaveTimeout: ReturnType<typeof setTimeout> | null = null;
 
   let changeVersion = 0;
+  let lastSavedChangeVersion = -1;
+
   let saveQueued = false;
+  let draftSaveQueued = false;
+  let isSavingDraft = false;
+  let draftId: string | null = null;
+
   let isHydrating = false;
+
+  function ensureDraftId(): string {
+    if (draftId === null) {
+      draftId = generateDraftId();
+    }
+
+    return draftId;
+  }
+
+  function scheduleDraftSave() {
+    if (draftSaveTimeout !== null) {
+      clearTimeout(draftSaveTimeout);
+    }
+
+    draftSaveTimeout = setTimeout(() => {
+      draftSaveTimeout = null;
+
+      if (!isDirty.value) {
+        return;
+      }
+
+      void saveDraft();
+    }, AUTOSAVE_DELAY);
+  }
+
+  function cancelDraftSave() {
+    if (draftSaveTimeout !== null) {
+      clearTimeout(draftSaveTimeout);
+      draftSaveTimeout = null;
+    }
+  }
+
+  async function saveDraft() {
+    if (isSavingDraft) {
+      draftSaveQueued = true;
+      return;
+    }
+
+    if (!isDirty.value) {
+      return;
+    }
+
+    isSavingDraft = true;
+
+    const versionAtStart = changeVersion;
+    const currentDraftId = ensureDraftId();
+
+    try {
+      const draft: DiagramDraft = {
+        id: currentDraftId,
+        diagramId: diagramId.value,
+        title: diagramTitle.value,
+        source: source.value,
+        document: cloneDocument(document.value),
+        updatedAt: Date.now(),
+      };
+
+      await saveDraftToStorage(draft);
+
+      /*
+       * A diagram save may have completed while this draft
+       * write was in progress.
+       *
+       * If the document version we saved as a draft has already
+       * been persisted as a normal diagram, the draft is no longer
+       * needed. Delete it to avoid resurrecting a stale recovery draft.
+       */
+      if (changeVersion === versionAtStart && lastSavedChangeVersion >= versionAtStart) {
+        await deleteDraft(currentDraftId);
+
+        if (draftId === currentDraftId) {
+          draftId = null;
+        }
+      }
+    } catch (error) {
+      console.error("Failed to save draft:", error);
+    } finally {
+      isSavingDraft = false;
+
+      if (draftSaveQueued) {
+        draftSaveQueued = false;
+
+        if (isDirty.value) {
+          scheduleDraftSave();
+        }
+      }
+    }
+  }
+
+  async function recoverDraft(draft: DiagramDraft): Promise<boolean> {
+    try {
+      loadDocument(draft.document, draft.title, draft.source);
+
+      /*
+       * loadDocument() intentionally creates
+       * an unsaved document and resets diagramId.
+       *
+       * For recovery of an existing diagram we
+       * need to restore its original diagram id.
+       */
+      diagramId.value = draft.diagramId;
+
+      draftId = draft.id;
+      isDirty.value = true;
+      changeVersion += 1;
+
+      return true;
+    } catch (error) {
+      console.error("Failed to recover draft:", error);
+      return false;
+    }
+  }
+
+  async function discardDraft(draft: DiagramDraft): Promise<boolean> {
+    try {
+      await deleteDraft(draft.id);
+
+      if (draftId === draft.id) {
+        draftId = null;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Failed to discard draft:", error);
+      return false;
+    }
+  }
+
+  async function findRecoveryDraft(targetDiagramId: string | null): Promise<DiagramDraft | null> {
+    try {
+      const drafts = await getAllDrafts();
+
+      return drafts.find((draft) => draft.diagramId === targetDiagramId) ?? null;
+    } catch (error) {
+      console.error("Failed to load drafts:", error);
+      return null;
+    }
+  }
 
   function markDirty() {
     changeVersion += 1;
@@ -61,6 +213,7 @@ export const useEditorStore = defineStore("editor", () => {
     autosaveError.value = null;
 
     scheduleAutosave();
+    scheduleDraftSave();
   }
 
   function scheduleAutosave() {
@@ -91,6 +244,11 @@ export const useEditorStore = defineStore("editor", () => {
   // ---------------------------------------------------------------------------
 
   function createNewDiagram(title = "Untitled Diagram") {
+    cancelAutosave();
+    cancelDraftSave();
+
+    draftId = null;
+
     isHydrating = true;
 
     try {
@@ -118,6 +276,8 @@ A["Start"] -> B["End"]
       history.clear();
       notifyHistoryChange();
       cancelAutosave();
+      cancelDraftSave();
+      draftId = null;
 
       parse();
     } finally {
@@ -164,7 +324,15 @@ A["Start"] -> B["End"]
       lastSavedAt.value = now;
 
       if (changeVersion === versionAtStart) {
+        lastSavedChangeVersion = versionAtStart;
+
         isDirty.value = false;
+        cancelDraftSave();
+
+        if (draftId !== null) {
+          await deleteDraft(draftId);
+          draftId = null;
+        }
       }
     } catch (error) {
       console.error("Failed to save diagram:", error);
@@ -176,7 +344,7 @@ A["Start"] -> B["End"]
         saveQueued = false;
 
         if (isDirty.value) {
-          scheduleAutosave();
+          void saveDiagram();
         }
       }
     }
@@ -199,6 +367,11 @@ A["Start"] -> B["End"]
   }
 
   async function loadDiagram(id: string) {
+    cancelAutosave();
+    cancelDraftSave();
+
+    draftId = null;
+
     const saved = await diagramsStore.getById(id);
 
     if (!saved) {
@@ -726,6 +899,9 @@ A["Start"] -> B["End"]
       resetViewport();
 
       cancelAutosave();
+      cancelDraftSave();
+
+      draftId = null;
 
       isDirty.value = false;
     } finally {
@@ -797,6 +973,10 @@ A["Start"] -> B["End"]
     createNewDiagram,
     saveDiagram,
     loadDiagram,
+
+    findRecoveryDraft,
+    recoverDraft,
+    discardDraft,
 
     updateNodeShape,
 

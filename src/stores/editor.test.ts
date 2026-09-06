@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from "pinia";
 
 import { useEditorStore } from "./editor";
 import { calculateNodeSize } from "@/features/diagram/nodeSizing";
+import type { DiagramDraft } from "@/features/drafts/types";
 
 const saveDiagramMock = vi.fn();
 const getByIdMock = vi.fn();
@@ -17,6 +18,73 @@ vi.mock("./diagrams", () => ({
 vi.mock("@/features/diagrams/diagramStorage", () => ({
   generateDiagramId: () => "diagram_test_123",
 }));
+
+const { saveDraftMock, getAllDraftsMock, deleteDraftMock } = vi.hoisted(() => ({
+  saveDraftMock: vi.fn(),
+  getAllDraftsMock: vi.fn(),
+  deleteDraftMock: vi.fn(),
+}));
+
+vi.mock("@/features/drafts/draftRepository", () => ({
+  deleteDraft: deleteDraftMock,
+  getAllDrafts: getAllDraftsMock,
+  saveDraft: saveDraftMock,
+}));
+
+function createDraft(overrides: Partial<DiagramDraft> = {}): DiagramDraft {
+  return {
+    id: "draft_test_1",
+    diagramId: null,
+    title: "Recovered Diagram",
+    source: `flowchart LR
+A -> B
+`,
+    document: {
+      direction: "LR",
+      nodes: [
+        {
+          id: "A",
+          label: "Start",
+          shape: "rounded",
+        },
+        {
+          id: "B",
+          label: "End",
+          shape: "diamond",
+        },
+      ],
+      edges: [
+        {
+          id: "A-B",
+          from: "A",
+          to: "B",
+          label: "HTTP",
+          routing: "around",
+        },
+      ],
+      layout: {
+        A: {
+          x: 100,
+          y: 200,
+          width: 120,
+          height: 50,
+        },
+        B: {
+          x: 400,
+          y: 200,
+          width: 120,
+          height: 50,
+        },
+      },
+      sourceMap: {
+        A: "source-a",
+        B: "source-b",
+      },
+    },
+    updatedAt: 1000,
+    ...overrides,
+  };
+}
 
 describe("editor store", () => {
   beforeEach(() => {
@@ -881,11 +949,14 @@ A -> B
 describe("useEditorStore autosave", () => {
   beforeEach(() => {
     vi.useFakeTimers();
-
     vi.clearAllMocks();
 
     getByIdMock.mockResolvedValue(null);
     saveDiagramMock.mockResolvedValue(undefined);
+
+    getAllDraftsMock.mockResolvedValue([]);
+    saveDraftMock.mockResolvedValue(undefined);
+    deleteDraftMock.mockResolvedValue(undefined);
 
     setActivePinia(createPinia());
   });
@@ -1061,5 +1132,89 @@ A -> B
     store.undo();
 
     expect(store.isDirty).toBe(true);
+  });
+
+  it("finds a recovery draft for a new diagram", async () => {
+    const draft = createDraft();
+
+    getAllDraftsMock.mockResolvedValue([draft]);
+
+    const store = useEditorStore();
+
+    await expect(store.findRecoveryDraft(null)).resolves.toEqual(draft);
+  });
+
+  it("does not return a draft belonging to another diagram", async () => {
+    const draft = createDraft({
+      diagramId: "diagram_1",
+    });
+
+    getAllDraftsMock.mockResolvedValue([draft]);
+
+    const store = useEditorStore();
+
+    await expect(store.findRecoveryDraft("diagram_2")).resolves.toBeNull();
+  });
+
+  it("finds a recovery draft for an existing diagram", async () => {
+    const draft = createDraft({
+      diagramId: "diagram_1",
+    });
+
+    getAllDraftsMock.mockResolvedValue([draft]);
+
+    const store = useEditorStore();
+
+    await expect(store.findRecoveryDraft("diagram_1")).resolves.toEqual(draft);
+  });
+
+  it("recovers the complete draft document", async () => {
+    const draft = createDraft({
+      diagramId: "diagram_existing",
+    });
+
+    const store = useEditorStore();
+
+    const recovered = await store.recoverDraft(draft);
+
+    expect(recovered).toBe(true);
+
+    expect(store.diagramId).toBe("diagram_existing");
+    expect(store.diagramTitle).toBe("Recovered Diagram");
+    expect(store.source).toBe(draft.source);
+    expect(store.isDirty).toBe(true);
+
+    expect(store.document).toEqual(draft.document);
+  });
+
+  it("discards a recovery draft", async () => {
+    const draft = createDraft();
+
+    deleteDraftMock.mockResolvedValue(undefined);
+
+    const store = useEditorStore();
+
+    const discarded = await store.discardDraft(draft);
+
+    expect(discarded).toBe(true);
+    expect(deleteDraftMock).toHaveBeenCalledWith(draft.id);
+  });
+
+  it("deletes the recovery draft after successful diagram save", async () => {
+    const draft = createDraft({
+      diagramId: "diagram_existing",
+    });
+
+    deleteDraftMock.mockResolvedValue(undefined);
+    saveDraftMock.mockResolvedValue(undefined);
+
+    const store = useEditorStore();
+
+    await store.recoverDraft(draft);
+
+    await store.saveDiagram();
+
+    expect(deleteDraftMock).toHaveBeenCalledWith(draft.id);
+    expect(store.isDirty).toBe(false);
   });
 });
