@@ -3,6 +3,7 @@ import {
   nextTick,
   onBeforeUnmount,
   onMounted,
+  ref,
   watch,
 } from 'vue'
 import {
@@ -20,6 +21,7 @@ import { exportDiagramToSvg } from '@/features/diagram/svgExporter'
 import { downloadSvg } from '@/features/diagram/svgDownload'
 import { downloadPng } from "@/features/diagram/pngDownload";
 import { useThemeStore } from '@/stores/theme'
+import { createShareUrl, getSharedDocument } from '@/features/share/shareUrl'
 
 const store = useEditorStore()
 const themeStore = useThemeStore();
@@ -263,7 +265,83 @@ async function handleExportPng() {
   );
 }
 
-onMounted(() => {
+const isShareCopied = ref(false);
+
+let shareCopiedTimeout:
+  ReturnType<typeof setTimeout> | null =
+  null;
+
+async function handleShare() {
+  if (
+    store.hasErrors ||
+    !store.document.nodes.length
+  ) {
+    return;
+  }
+
+  const url =
+    createShareUrl(store.document);
+
+  try {
+    await navigator.clipboard.writeText(url);
+
+    isShareCopied.value = true;
+
+    if (shareCopiedTimeout !== null) {
+      clearTimeout(shareCopiedTimeout);
+    }
+
+    shareCopiedTimeout =
+      setTimeout(() => {
+        isShareCopied.value = false;
+      }, 2000);
+  } catch {
+    isShareCopied.value = false;
+  }
+}
+
+function clearShareHash() {
+  if (!window.location.hash.startsWith("#share=")) {
+    return;
+  }
+
+  const url =
+    new URL(window.location.href);
+
+  url.hash = "";
+
+  window.history.replaceState(
+    window.history.state,
+    "",
+    url.toString(),
+  );
+}
+
+async function handleSave() {
+  await store.saveDiagram();
+  clearShareHash();
+}
+
+onMounted(async () => {
+    const sharedDocument = getSharedDocument();
+
+    const id = route.query.id;
+    const source = route.query.source;
+
+    if (sharedDocument) {
+      store.loadDocument(
+        sharedDocument,
+        "Shared Diagram",
+      );
+    } else if (typeof id === "string") {
+      await store.loadDiagram(id);
+    } else if (typeof source === "string") {
+      store.setSource(source);
+      store.parse();
+    } else {
+      store.createNewDiagram();
+    }
+
   window.addEventListener(
     'keydown',
     handleKeyDown,
@@ -271,6 +349,10 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  if (shareCopiedTimeout !== null) {
+    clearTimeout(shareCopiedTimeout);
+  }
+
   window.removeEventListener(
     'keydown',
     handleKeyDown,
@@ -354,9 +436,21 @@ onBeforeUnmount(() => {
           type="button"
           class="header-button"
           :disabled="store.isSaving || !store.isDirty"
-          @click="store.saveDiagram"
+          @click="handleSave"
         >
           Save
+        </button>
+
+        <button
+          type="button"
+          class="header-button"
+          :disabled="
+            store.hasErrors ||
+            !store.document.nodes.length
+          "
+          @click="handleShare"
+        >
+          {{ isShareCopied ? 'Copied!' : 'Share' }}
         </button>
 
         <button

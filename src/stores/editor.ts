@@ -685,6 +685,26 @@ A["Start"] -> B["End"]
     return history.canRedo;
   });
 
+  // ---
+
+  function loadDocument(nextDocument: DiagramDocument, title = "Shared Diagram") {
+    diagramId.value = null;
+    diagramTitle.value = title;
+    lastSavedAt.value = null;
+
+    document.value = cloneDocument(nextDocument);
+
+    source.value = serializeDiagram(document.value);
+
+    errors.value = [];
+    selectedNodeId.value = null;
+
+    history.clear();
+    notifyHistoryChange();
+
+    resetViewport();
+  }
+
   return {
     // document
     source,
@@ -751,5 +771,7 @@ A["Start"] -> B["End"]
     loadDiagram,
 
     updateNodeShape,
+
+    loadDocument,
   };
 });
