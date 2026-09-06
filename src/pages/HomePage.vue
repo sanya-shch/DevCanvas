@@ -1,32 +1,27 @@
 <script setup lang="ts">
-import { RouterLink } from 'vue-router'
+import { RouterLink } from "vue-router";
 
 const features = [
   {
-    title: 'Visual editor',
-    description:
-      'Build and arrange diagrams directly on the canvas.',
+    title: "Visual editor",
+    description: "Build and arrange diagrams directly on the canvas.",
   },
   {
-    title: 'Code driven',
-    description:
-      'Define diagrams using a simple, readable diagram DSL.',
+    title: "Code driven",
+    description: "Define diagrams using a simple, readable diagram DSL.",
   },
   {
-    title: 'Developer focused',
-    description:
-      'Keep diagrams close to the code and the architecture they describe.',
+    title: "Developer focused",
+    description: "Keep diagrams close to the code and the architecture they describe.",
   },
-]
+];
 </script>
 
 <template>
   <div class="home-page">
     <section class="hero">
       <div class="hero-content">
-        <span class="eyebrow">
-          Diagramming for developers
-        </span>
+        <span class="eyebrow"> Diagramming for developers </span>
 
         <h1>
           Design systems.
@@ -35,34 +30,20 @@ const features = [
         </h1>
 
         <p class="hero-description">
-          DevCanvas is a developer-focused diagram editor
-          that combines code and visual editing in one place.
+          DevCanvas is a developer-focused diagram editor that combines code and visual editing in
+          one place.
         </p>
 
         <div class="hero-actions">
-          <RouterLink
-            to="/editor"
-            class="primary-button"
-          >
-            Open editor
-          </RouterLink>
+          <RouterLink to="/editor" class="primary-button"> Open editor </RouterLink>
 
-          <RouterLink
-            to="/tutorials"
-            class="secondary-button"
-          >
-            Explore tutorials
-          </RouterLink>
+          <RouterLink to="/tutorials" class="secondary-button"> Explore tutorials </RouterLink>
         </div>
       </div>
     </section>
 
     <section class="features">
-      <article
-        v-for="feature in features"
-        :key="feature.title"
-        class="feature-card"
-      >
+      <article v-for="feature in features" :key="feature.title" class="feature-card">
         <h2>
           {{ feature.title }}
         </h2>

@@ -20,10 +20,7 @@ function formatDate(timestamp: number) {
 
 <template>
   <Teleport to="body">
-    <div
-      class="draft-recovery-backdrop"
-      role="presentation"
-    >
+    <div class="draft-recovery-backdrop" role="presentation">
       <section
         class="draft-recovery-dialog"
         role="dialog"
@@ -31,23 +28,18 @@ function formatDate(timestamp: number) {
         aria-labelledby="draft-recovery-title"
         aria-describedby="draft-recovery-description"
       >
-        <div class="draft-recovery-dialog__icon">
-          ↻
-        </div>
+        <div class="draft-recovery-dialog__icon">↻</div>
 
         <div class="draft-recovery-dialog__content">
-          <h2 id="draft-recovery-title">
-            Recover unsaved changes?
-          </h2>
+          <h2 id="draft-recovery-title">Recover unsaved changes?</h2>
 
           <p id="draft-recovery-description">
             DevCanvas found an unsaved draft of
-            <strong>{{ draft.title }}</strong>.
+            <strong>{{ draft.title }}</strong
+            >.
           </p>
 
-          <p class="draft-recovery-dialog__meta">
-            Last updated {{ formatDate(draft.updatedAt) }}
-          </p>
+          <p class="draft-recovery-dialog__meta">Last updated {{ formatDate(draft.updatedAt) }}</p>
         </div>
 
         <div class="draft-recovery-dialog__actions">

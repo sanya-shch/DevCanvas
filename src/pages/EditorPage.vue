@@ -1,26 +1,17 @@
 <script setup lang="ts">
-import {
-  nextTick,
-  onBeforeUnmount,
-  onMounted,
-  ref,
-  watch,
-} from 'vue'
-import {
-  useRoute,
-  useRouter,
-} from 'vue-router'
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 
-import { useEditorStore } from '@/stores/editor'
-import CodeEditor from '@/components/editor/CodeEditor.vue'
-import DiagramCanvas from '@/components/canvas/DiagramCanvas.vue'
-import NodeInspector from '@/components/canvas/NodeInspector.vue'
-import ThemeSwitcher from '@/components/theme/ThemeSwitcher.vue'
-import { exportDiagramToSvg } from '@/features/diagram/svgExporter'
-import { downloadSvg } from '@/features/diagram/svgDownload'
+import { useEditorStore } from "@/stores/editor";
+import CodeEditor from "@/components/editor/CodeEditor.vue";
+import DiagramCanvas from "@/components/canvas/DiagramCanvas.vue";
+import NodeInspector from "@/components/canvas/NodeInspector.vue";
+import ThemeSwitcher from "@/components/theme/ThemeSwitcher.vue";
+import { exportDiagramToSvg } from "@/features/diagram/svgExporter";
+import { downloadSvg } from "@/features/diagram/svgDownload";
 import { downloadPng } from "@/features/diagram/pngDownload";
-import { useThemeStore } from '@/stores/theme'
-import { createShareUrl, getSharedDocument } from '@/features/share/shareUrl'
+import { useThemeStore } from "@/stores/theme";
+import { createShareUrl, getSharedDocument } from "@/features/share/shareUrl";
 import {
   createDevCanvasFile,
   serializeDevCanvasFile,
@@ -31,40 +22,43 @@ import DraftRecoveryDialog from "@/features/drafts/components/DraftRecoveryDialo
 
 import type { DiagramDraft } from "@/features/drafts/types";
 
-const store = useEditorStore()
+const store = useEditorStore();
 const themeStore = useThemeStore();
 
-const route = useRoute()
-const router = useRouter()
+const route = useRoute();
+const router = useRouter();
 
 const recoveryDraft = ref<DiagramDraft | null>(null);
 const isRecoveringDraft = ref(false);
 
-let parseTimeout: ReturnType<typeof setTimeout> | null = null
+const isEditingTitle = ref(false);
+const editingTitle = ref("");
+
+let parseTimeout: ReturnType<typeof setTimeout> | null = null;
 
 function scheduleParse() {
   if (parseTimeout !== null) {
-    clearTimeout(parseTimeout)
+    clearTimeout(parseTimeout);
   }
 
   parseTimeout = setTimeout(() => {
-    store.parse()
-    parseTimeout = null
-  }, 250)
+    store.parse();
+    parseTimeout = null;
+  }, 250);
 }
 
 watch(
   () => store.source,
   () => {
-    scheduleParse()
+    scheduleParse();
   },
-)
+);
 
 watch(
   () => store.diagramId,
   (id) => {
     if (!id || route.query.id === id) {
-      return
+      return;
     }
 
     void router.replace({
@@ -72,51 +66,41 @@ watch(
         ...route.query,
         id,
       },
-    })
+    });
   },
-)
+);
 
 onMounted(async () => {
-  const id = route.query.id
-  const source = route.query.source
+  const id = route.query.id;
+  const source = route.query.source;
 
-  if (typeof id === 'string') {
-    await store.loadDiagram(id)
-  } else if (typeof source === 'string') {
-    store.setSource(source)
-    store.parse()
+  if (typeof id === "string") {
+    await store.loadDiagram(id);
+  } else if (typeof source === "string") {
+    store.setSource(source);
+    store.parse();
   } else {
-    store.createNewDiagram()
+    store.createNewDiagram();
   }
 
-  await nextTick()
+  await nextTick();
 
   requestAnimationFrame(() => {
-    const canvas = document.querySelector(
-      '.diagram-canvas',
-    )
+    const canvas = document.querySelector(".diagram-canvas");
 
     if (!(canvas instanceof HTMLElement)) {
-      return
+      return;
     }
 
-    store.fitToScreen(
-      canvas.clientWidth,
-      canvas.clientHeight,
-    )
-  })
-})
+    store.fitToScreen(canvas.clientWidth, canvas.clientHeight);
+  });
+});
 
-function handleKeyDown(
-  event: KeyboardEvent,
-) {
-  const target =
-    event.target as HTMLElement | null;
+function handleKeyDown(event: KeyboardEvent) {
+  const target = event.target as HTMLElement | null;
 
   const isEditable =
-    target?.tagName === 'INPUT' ||
-    target?.tagName === 'TEXTAREA' ||
-    target?.isContentEditable;
+    target?.tagName === "INPUT" || target?.tagName === "TEXTAREA" || target?.isContentEditable;
 
   /*
    * Let Monaco and inputs handle their own
@@ -126,30 +110,24 @@ function handleKeyDown(
     return;
   }
 
-  const modifier =
-    event.metaKey ||
-    event.ctrlKey;
+  const modifier = event.metaKey || event.ctrlKey;
 
   if (!modifier) {
-    if (event.key === 'Escape') {
+    if (event.key === "Escape") {
       store.selectNode(null);
     }
 
     return;
   }
 
-  const key =
-    event.key.toLowerCase();
+  const key = event.key.toLowerCase();
 
   /*
    * Undo
    *
    * Cmd/Ctrl + Z
    */
-  if (
-    key === 'z' &&
-    !event.shiftKey
-  ) {
+  if (key === "z" && !event.shiftKey) {
     event.preventDefault();
 
     store.undo();
@@ -162,10 +140,7 @@ function handleKeyDown(
    *
    * Cmd/Ctrl + Shift + Z
    */
-  if (
-    key === 'z' &&
-    event.shiftKey
-  ) {
+  if (key === "z" && event.shiftKey) {
     event.preventDefault();
 
     store.redo();
@@ -178,7 +153,7 @@ function handleKeyDown(
    *
    * Cmd/Ctrl + Y
    */
-  if (key === 'y') {
+  if (key === "y") {
     event.preventDefault();
 
     store.redo();
@@ -191,7 +166,7 @@ function handleKeyDown(
    *
    * Cmd/Ctrl + Enter
    */
-  if (key === 'enter') {
+  if (key === "enter") {
     event.preventDefault();
 
     if (parseTimeout !== null) {
@@ -209,7 +184,7 @@ function handleKeyDown(
    *
    * Cmd/Ctrl + 0
    */
-  if (key === '0') {
+  if (key === "0") {
     event.preventDefault();
 
     store.resetViewport();
@@ -218,173 +193,111 @@ function handleKeyDown(
 
 function confirmDiscardChanges(): boolean {
   if (!store.isDirty) {
-    return true
+    return true;
   }
 
-  return window.confirm(
-    'You have unsaved changes. Are you sure you want to discard them?',
-  )
+  return window.confirm("You have unsaved changes. Are you sure you want to discard them?");
 }
 
 async function handleCreateNewDiagram() {
   if (!confirmDiscardChanges()) {
-    return
-  }
-
-  await router.replace({
-    path: '/editor',
-  })
-
-  store.createNewDiagram()
-}
-
-function sanitizeFilename(
-  value: string,
-): string {
-  return value
-    .trim()
-    .replace(
-      /[<>:"/\\|?*]+/g,
-      "-",
-    )
-    .replace(
-      /\s+/g,
-      "-",
-    )
-    || "diagram";
-}
-
-function handleExportDevCanvas() {
-  if (
-    store.hasErrors ||
-    !store.document.nodes.length
-  ) {
     return;
   }
 
-  const file =
-    createDevCanvasFile(
-      store.diagramTitle,
-      store.source,
-      store.document,
-    );
+  await router.replace({
+    path: "/editor",
+  });
 
-  const content =
-    serializeDevCanvasFile(file);
+  store.createNewDiagram();
+}
 
-  downloadDevCanvasFile(
-    content,
-    `${sanitizeFilename(
-      store.diagramTitle,
-    )}.devcanvas`,
+function sanitizeFilename(value: string): string {
+  return (
+    value
+      .trim()
+      .replace(/[<>:"/\\|?*]+/g, "-")
+      .replace(/\s+/g, "-") || "diagram"
   );
 }
 
+function handleExportDevCanvas() {
+  if (store.hasErrors || !store.document.nodes.length) {
+    return;
+  }
+
+  const file = createDevCanvasFile(store.diagramTitle, store.source, store.document);
+
+  const content = serializeDevCanvasFile(file);
+
+  downloadDevCanvasFile(content, `${sanitizeFilename(store.diagramTitle)}.devcanvas`);
+}
+
 async function handleImportDevCanvas() {
-  const input =
-    document.createElement("input");
+  const input = document.createElement("input");
 
   input.type = "file";
   input.accept = ".devcanvas,application/json";
 
-  const file =
-    await new Promise<File | null>(
-      (resolve) => {
-        input.onchange = () => {
-          resolve(
-            input.files?.[0] ?? null,
-          );
-        };
+  const file = await new Promise<File | null>((resolve) => {
+    input.onchange = () => {
+      resolve(input.files?.[0] ?? null);
+    };
 
-        input.click();
-      },
-    );
+    input.click();
+  });
 
   if (!file) {
     return;
   }
 
   try {
-    const content = await file.text()
-    const imported = parseDevCanvasFile(content)
+    const content = await file.text();
+    const imported = parseDevCanvasFile(content);
 
     if (!confirmDiscardChanges()) {
-      return
+      return;
     }
 
-    store.loadDocument(
-      imported.document,
-      imported.title,
-      imported.source,
-    )
+    store.loadDocument(imported.document, imported.title, imported.source);
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Unable to import .devcanvas file";
+    const message = error instanceof Error ? error.message : "Unable to import .devcanvas file";
 
     window.alert(message);
   }
 }
 
 function handleExportSvg() {
-  if (
-    store.hasErrors ||
-    !store.document.nodes.length
-  ) {
-    return
-  }
-
-  const svg = exportDiagramToSvg(
-    store.document,
-    themeStore.theme,
-  )
-
-  downloadSvg(
-    svg,
-    `${sanitizeFilename(store.diagramTitle)}.svg`,
-  )
-}
-
-async function handleExportPng() {
-  if (
-    store.hasErrors ||
-    !store.document.nodes.length
-  ) {
+  if (store.hasErrors || !store.document.nodes.length) {
     return;
   }
 
-  const svg =
-    exportDiagramToSvg(
-      store.document,
-      themeStore.theme,
-    );
+  const svg = exportDiagramToSvg(store.document, themeStore.theme);
 
-  await downloadPng(
-    svg,
-    `${sanitizeFilename(store.diagramTitle)}.png`,
-    {
-      scale: 2,
-    },
-  );
+  downloadSvg(svg, `${sanitizeFilename(store.diagramTitle)}.svg`);
+}
+
+async function handleExportPng() {
+  if (store.hasErrors || !store.document.nodes.length) {
+    return;
+  }
+
+  const svg = exportDiagramToSvg(store.document, themeStore.theme);
+
+  await downloadPng(svg, `${sanitizeFilename(store.diagramTitle)}.png`, {
+    scale: 2,
+  });
 }
 
 const isShareCopied = ref(false);
 
-let shareCopiedTimeout:
-  ReturnType<typeof setTimeout> | null =
-  null;
+let shareCopiedTimeout: ReturnType<typeof setTimeout> | null = null;
 
 async function handleShare() {
-  if (
-    store.hasErrors ||
-    !store.document.nodes.length
-  ) {
+  if (store.hasErrors || !store.document.nodes.length) {
     return;
   }
 
-  const url =
-    createShareUrl(store.document);
+  const url = createShareUrl(store.document);
 
   try {
     await navigator.clipboard.writeText(url);
@@ -395,10 +308,9 @@ async function handleShare() {
       clearTimeout(shareCopiedTimeout);
     }
 
-    shareCopiedTimeout =
-      setTimeout(() => {
-        isShareCopied.value = false;
-      }, 2000);
+    shareCopiedTimeout = setTimeout(() => {
+      isShareCopied.value = false;
+    }, 2000);
   } catch {
     isShareCopied.value = false;
   }
@@ -409,16 +321,11 @@ function clearShareHash() {
     return;
   }
 
-  const url =
-    new URL(window.location.href);
+  const url = new URL(window.location.href);
 
   url.hash = "";
 
-  window.history.replaceState(
-    window.history.state,
-    "",
-    url.toString(),
-  );
+  window.history.replaceState(window.history.state, "", url.toString());
 }
 
 async function handleSave() {
@@ -426,18 +333,46 @@ async function handleSave() {
   clearShareHash();
 }
 
-function handleBeforeUnload(event: BeforeUnloadEvent) {
-  if (!store.isDirty) {
-    return
-  }
+function startEditingTitle() {
+  editingTitle.value = store.diagramTitle;
+  isEditingTitle.value = true;
 
-  event.preventDefault()
-  event.returnValue = ''
+  void nextTick(() => {
+    const input = document.querySelector(".diagram-title-input");
+
+    if (input instanceof HTMLInputElement) {
+      input.focus();
+      input.select();
+    }
+  });
 }
 
-async function checkForRecoveryDraft(
-  diagramId: string | null,
-) {
+function finishEditingTitle() {
+  if (!isEditingTitle.value) {
+    return;
+  }
+
+  const title = editingTitle.value.trim();
+
+  if (title) {
+    store.setDiagramTitle(title);
+  } else {
+    editingTitle.value = store.diagramTitle;
+  }
+
+  isEditingTitle.value = false;
+}
+
+function handleBeforeUnload(event: BeforeUnloadEvent) {
+  if (!store.isDirty) {
+    return;
+  }
+
+  event.preventDefault();
+  event.returnValue = "";
+}
+
+async function checkForRecoveryDraft(diagramId: string | null) {
   const draft = await store.findRecoveryDraft(diagramId);
 
   if (!draft) {
@@ -465,18 +400,13 @@ async function handleRecoverDraft() {
       await nextTick();
 
       requestAnimationFrame(() => {
-        const canvas = document.querySelector(
-          ".diagram-canvas",
-        );
+        const canvas = document.querySelector(".diagram-canvas");
 
         if (!(canvas instanceof HTMLElement)) {
           return;
         }
 
-        store.fitToScreen(
-          canvas.clientWidth,
-          canvas.clientHeight,
-        );
+        store.fitToScreen(canvas.clientWidth, canvas.clientHeight);
       });
     }
   } finally {
@@ -505,10 +435,7 @@ onMounted(async () => {
   const source = route.query.source;
 
   if (sharedDocument) {
-    store.loadDocument(
-      sharedDocument,
-      "Shared Diagram",
-    );
+    store.loadDocument(sharedDocument, "Shared Diagram");
   } else if (typeof id === "string") {
     await store.loadDiagram(id);
   } else if (typeof source === "string") {
@@ -523,25 +450,14 @@ onMounted(async () => {
    * not a normal editor session.
    */
   if (!sharedDocument && typeof source !== "string") {
-    const recoveryDiagramId =
-      typeof id === "string"
-        ? id
-        : null;
+    const recoveryDiagramId = typeof id === "string" ? id : null;
 
-    await checkForRecoveryDraft(
-      recoveryDiagramId,
-    );
+    await checkForRecoveryDraft(recoveryDiagramId);
   }
 
-  window.addEventListener(
-    "keydown",
-    handleKeyDown,
-  );
+  window.addEventListener("keydown", handleKeyDown);
 
-  window.addEventListener(
-    "beforeunload",
-    handleBeforeUnload,
-  );
+  window.addEventListener("beforeunload", handleBeforeUnload);
 });
 
 onBeforeUnmount(() => {
@@ -549,21 +465,15 @@ onBeforeUnmount(() => {
     clearTimeout(shareCopiedTimeout);
   }
 
-  window.removeEventListener(
-    'keydown',
-    handleKeyDown,
-  )
+  window.removeEventListener("keydown", handleKeyDown);
 
   if (parseTimeout !== null) {
-    clearTimeout(parseTimeout)
-    parseTimeout = null
+    clearTimeout(parseTimeout);
+    parseTimeout = null;
   }
 
-  window.removeEventListener(
-    'beforeunload',
-    handleBeforeUnload,
-  );
-})
+  window.removeEventListener("beforeunload", handleBeforeUnload);
+});
 </script>
 
 <template>
@@ -576,18 +486,38 @@ onBeforeUnmount(() => {
 
   <main class="editor-page">
     <header class="editor-header">
-      <RouterLink
-        to="/"
-        class="brand"
-      >
-        <span class="brand-mark">
-          ◆
-        </span>
+      <div class="editor-header-left">
+        <RouterLink to="/" class="brand">
+          <span class="brand-mark"> ◆ </span>
 
-        <span class="brand-name">
-          DevCanvas
-        </span>
-      </RouterLink>
+          <span class="brand-name"> DevCanvas </span>
+        </RouterLink>
+
+        <div class="diagram-title">
+          <input
+            v-if="isEditingTitle"
+            v-model="editingTitle"
+            class="diagram-title-input"
+            type="text"
+            maxlength="100"
+            @keydown.enter="finishEditingTitle"
+            @keydown.escape="isEditingTitle = false"
+            @blur="finishEditingTitle"
+          />
+
+          <button
+            v-else
+            type="button"
+            class="diagram-title-button"
+            title="Rename diagram"
+            @click="startEditingTitle"
+          >
+            <span class="diagram-title-text">
+              {{ store.diagramTitle }}
+            </span>
+          </button>
+        </div>
+      </div>
 
       <div class="editor-actions">
         <button
@@ -611,33 +541,15 @@ onBeforeUnmount(() => {
         </button>
 
         <div class="save-status">
-          <span
-            v-if="store.autosaveError"
-            class="save-status__error"
-          >
+          <span v-if="store.autosaveError" class="save-status__error">
             {{ store.autosaveError }}
           </span>
 
-          <span
-            v-else-if="store.isSaving"
-            class="save-status__saving"
-          >
-            Saving...
-          </span>
+          <span v-else-if="store.isSaving" class="save-status__saving"> Saving... </span>
 
-          <span
-            v-else-if="store.isDirty"
-            class="save-status__dirty"
-          >
-            Unsaved changes
-          </span>
+          <span v-else-if="store.isDirty" class="save-status__dirty"> Unsaved changes </span>
 
-          <span
-            v-else-if="store.lastSavedAt"
-            class="save-status__saved"
-          >
-            Saved
-          </span>
+          <span v-else-if="store.lastSavedAt" class="save-status__saved"> Saved </span>
         </div>
 
         <button
@@ -652,13 +564,10 @@ onBeforeUnmount(() => {
         <button
           type="button"
           class="header-button"
-          :disabled="
-            store.hasErrors ||
-            !store.document.nodes.length
-          "
+          :disabled="store.hasErrors || !store.document.nodes.length"
           @click="handleShare"
         >
-          {{ isShareCopied ? 'Copied!' : 'Share' }}
+          {{ isShareCopied ? "Copied!" : "Share" }}
         </button>
 
         <button
@@ -674,10 +583,7 @@ onBeforeUnmount(() => {
         <button
           type="button"
           class="header-button"
-          :disabled="
-            store.hasErrors ||
-            !store.document.nodes.length
-          "
+          :disabled="store.hasErrors || !store.document.nodes.length"
           title="Export diagram as PNG"
           @click="handleExportPng"
         >
@@ -687,30 +593,15 @@ onBeforeUnmount(() => {
         <button
           type="button"
           class="header-button"
-          :disabled="
-            store.hasErrors ||
-            !store.document.nodes.length
-          "
+          :disabled="store.hasErrors || !store.document.nodes.length"
           @click="handleExportDevCanvas"
         >
           Export
         </button>
 
-        <button
-          type="button"
-          class="header-button"
-          @click="handleImportDevCanvas"
-        >
-          Import
-        </button>
+        <button type="button" class="header-button" @click="handleImportDevCanvas">Import</button>
 
-        <button
-          type="button"
-          class="header-button"
-          @click="handleCreateNewDiagram"
-        >
-          New
-        </button>
+        <button type="button" class="header-button" @click="handleCreateNewDiagram">New</button>
 
         <button
           type="button"
@@ -741,14 +632,10 @@ onBeforeUnmount(() => {
           <div class="panel-title">
             <span class="panel-indicator code-indicator" />
 
-            <span>
-              Code
-            </span>
+            <span> Code </span>
           </div>
 
-          <span class="panel-hint">
-            Cmd/Ctrl + Enter to parse
-          </span>
+          <span class="panel-hint"> Cmd/Ctrl + Enter to parse </span>
         </div>
 
         <div class="panel-content">
@@ -762,25 +649,15 @@ onBeforeUnmount(() => {
           <div class="panel-title">
             <span class="panel-indicator canvas-indicator" />
 
-            <span>
-              Visual Editor
-            </span>
+            <span> Visual Editor </span>
           </div>
 
-          <span
-            v-if="store.hasErrors"
-            class="status error"
-          >
+          <span v-if="store.hasErrors" class="status error">
             {{ store.errors.length }}
-            {{ store.errors.length === 1 ? 'error' : 'errors' }}
+            {{ store.errors.length === 1 ? "error" : "errors" }}
           </span>
 
-          <span
-            v-else
-            class="status success"
-          >
-            Valid
-          </span>
+          <span v-else class="status success"> Valid </span>
         </div>
 
         <div class="panel-content">
@@ -798,27 +675,21 @@ onBeforeUnmount(() => {
       <div class="footer-left">
         <span>
           {{ store.document.nodes.length }}
-          {{ store.document.nodes.length === 1 ? 'node' : 'nodes' }}
+          {{ store.document.nodes.length === 1 ? "node" : "nodes" }}
         </span>
 
-        <span class="footer-separator">
-          •
-        </span>
+        <span class="footer-separator"> • </span>
 
         <span>
           {{ store.document.edges.length }}
-          {{ store.document.edges.length === 1 ? 'edge' : 'edges' }}
+          {{ store.document.edges.length === 1 ? "edge" : "edges" }}
         </span>
       </div>
 
       <div class="footer-right">
-        <span>
-          {{ Math.round(store.zoom * 100) }}%
-        </span>
+        <span> {{ Math.round(store.zoom * 100) }}% </span>
 
-        <span class="footer-separator">
-          •
-        </span>
+        <span class="footer-separator"> • </span>
 
         <span>
           {{ store.document.direction }}
@@ -890,6 +761,66 @@ onBeforeUnmount(() => {
   font-size: 15px;
   font-weight: 650;
   letter-spacing: -0.01em;
+}
+
+.editor-header-left {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 20px;
+}
+
+.diagram-title {
+  min-width: 0;
+}
+
+.diagram-title-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+
+  max-width: 280px;
+  padding: 5px 7px;
+
+  border: 0;
+  border-radius: 6px;
+
+  background: transparent;
+  color: var(--text-primary);
+
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.diagram-title-button:hover {
+  background: var(--hover-background);
+}
+
+.diagram-title-text {
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diagram-title-input {
+  width: 280px;
+  height: 32px;
+
+  padding: 0 9px;
+
+  border: 1px solid var(--accent-color);
+  border-radius: 6px;
+
+  outline: none;
+
+  background: var(--panel-background);
+  color: var(--text-primary);
+
+  font: inherit;
+  font-size: 13px;
 }
 
 .editor-actions {
@@ -1116,8 +1047,7 @@ onBeforeUnmount(() => {
     display: flex;
   }
 
-  .inspector-panel
-    :deep(.node-inspector) {
+  .inspector-panel :deep(.node-inspector) {
     width: 260px;
     min-width: 260px;
   }
@@ -1147,6 +1077,18 @@ onBeforeUnmount(() => {
 
   .inspector-panel {
     display: none;
+  }
+
+  .editor-header-left {
+    gap: 10px;
+  }
+
+  .diagram-title-button {
+    max-width: 140px;
+  }
+
+  .diagram-title-input {
+    width: 140px;
   }
 }
 </style>

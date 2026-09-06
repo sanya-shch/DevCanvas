@@ -1,147 +1,107 @@
 <script setup lang="ts">
-import {
-  nextTick,
-  ref,
-} from 'vue'
+import { nextTick, ref } from "vue";
 
-import {
-  useEditorStore,
-} from '@/stores/editor'
+import { useEditorStore } from "@/stores/editor";
 
-import {
-  wrapNodeLabel,
-} from '@/features/diagram/nodeSizing'
+import { wrapNodeLabel } from "@/features/diagram/nodeSizing";
 
-import type {
-  DiagramNode,
-} from '@/features/diagram/types'
+import type { DiagramNode } from "@/features/diagram/types";
 
 const props = defineProps<{
-  node: DiagramNode
+  node: DiagramNode;
   layout: {
-    x: number
-    y: number
-    width: number
-    height: number
-  }
-  selected: boolean
-}>()
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  selected: boolean;
+}>();
 
 const emit = defineEmits<{
-  select: [nodeId: string]
-  dragStart: [
-    event: PointerEvent,
-    nodeId: string,
-  ]
-}>()
+  select: [nodeId: string];
+  dragStart: [event: PointerEvent, nodeId: string];
+}>();
 
-const store =
-  useEditorStore()
+const store = useEditorStore();
 
-const isEditing =
-  ref(false)
+const isEditing = ref(false);
 
-const draftLabel =
-  ref('')
+const draftLabel = ref("");
 
-const inputRef =
-  ref<HTMLInputElement | null>(
-    null,
-  )
+const inputRef = ref<HTMLInputElement | null>(null);
 
-const labelLines =
-  () =>
-    wrapNodeLabel(
-      props.node.label,
-      props.layout.width,
-    )
+const labelLines = () => wrapNodeLabel(props.node.label, props.layout.width);
 
-function handlePointerDown(
-  event: PointerEvent,
-) {
+function handlePointerDown(event: PointerEvent) {
   if (isEditing.value) {
-    return
+    return;
   }
 
-  event.stopPropagation()
+  event.stopPropagation();
 
-  emit(
-    'select',
-    props.node.id,
-  )
+  emit("select", props.node.id);
 
-  emit(
-    'dragStart',
-    event,
-    props.node.id,
-  )
+  emit("dragStart", event, props.node.id);
 }
 
 async function startEditing(event: MouseEvent) {
-  event.stopPropagation()
+  event.stopPropagation();
 
   if (isEditing.value) {
-    return
+    return;
   }
 
-  emit('select', props.node.id)
+  emit("select", props.node.id);
 
-  draftLabel.value = props.node.label
-  isEditing.value = true
+  draftLabel.value = props.node.label;
+  isEditing.value = true;
 
-  await nextTick()
+  await nextTick();
 
-  inputRef.value?.focus()
-  inputRef.value?.select()
+  inputRef.value?.focus();
+  inputRef.value?.select();
 }
 
 function cancelEditing() {
-  isEditing.value = false
-  draftLabel.value =
-    props.node.label
+  isEditing.value = false;
+  draftLabel.value = props.node.label;
 }
 
 function commitEditing() {
-  const nextLabel =
-    draftLabel.value.trim()
+  const nextLabel = draftLabel.value.trim();
 
   if (!nextLabel) {
-    cancelEditing()
-    return
+    cancelEditing();
+    return;
   }
 
-  const changed =
-    nextLabel !== props.node.label
+  const changed = nextLabel !== props.node.label;
 
-  isEditing.value = false
+  isEditing.value = false;
 
   if (!changed) {
-    return
+    return;
   }
 
-  store.updateNodeLabel(
-    props.node.id,
-    nextLabel,
-  )
+  store.updateNodeLabel(props.node.id, nextLabel);
 }
 
-function handleInputKeyDown(
-  event: KeyboardEvent,
-) {
-  if (event.key === 'Enter') {
-    event.preventDefault()
-    event.stopPropagation()
+function handleInputKeyDown(event: KeyboardEvent) {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    event.stopPropagation();
 
-    commitEditing()
+    commitEditing();
 
-    return
+    return;
   }
 
-  if (event.key === 'Escape') {
-    event.preventDefault()
-    event.stopPropagation()
+  if (event.key === "Escape") {
+    event.preventDefault();
+    event.stopPropagation();
 
-    cancelEditing()
+    cancelEditing();
   }
 }
 </script>
@@ -157,11 +117,7 @@ function handleInputKeyDown(
     @pointerdown="handlePointerDown"
     @dblclick="startEditing"
   >
-    <rect
-      v-if="node.shape === 'rectangle'"
-      :width="layout.width"
-      :height="layout.height"
-    />
+    <rect v-if="node.shape === 'rectangle'" :width="layout.width" :height="layout.height" />
 
     <rect
       v-else-if="node.shape === 'rounded'"
@@ -191,25 +147,15 @@ function handleInputKeyDown(
     <text
       v-if="!isEditing"
       :x="layout.width / 2"
-      :y="
-        layout.height / 2 -
-        (labelLines().length - 1) * 10
-      "
+      :y="layout.height / 2 - (labelLines().length - 1) * 10"
       text-anchor="middle"
       dominant-baseline="middle"
     >
       <tspan
-        v-for="(
-          line,
-          index
-        ) in labelLines()"
+        v-for="(line, index) in labelLines()"
         :key="index"
         :x="layout.width / 2"
-        :dy="
-          index === 0
-            ? 0
-            : 20
-        "
+        :dy="index === 0 ? 0 : 20"
       >
         {{ line }}
       </tspan>
@@ -219,18 +165,8 @@ function handleInputKeyDown(
       v-if="isEditing"
       x="8"
       y="8"
-      :width="
-        Math.max(
-          layout.width - 16,
-          20,
-        )
-      "
-      :height="
-        Math.max(
-          layout.height - 16,
-          20,
-        )
-      "
+      :width="Math.max(layout.width - 16, 20)"
+      :height="Math.max(layout.height - 16, 20)"
       @pointerdown.stop
       @dblclick.stop
     >
@@ -276,10 +212,7 @@ function handleInputKeyDown(
 
   font-size: 14px;
 
-  font-family:
-    Inter,
-    system-ui,
-    sans-serif;
+  font-family: Inter, system-ui, sans-serif;
 
   pointer-events: none;
   user-select: none;

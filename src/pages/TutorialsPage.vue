@@ -1,31 +1,22 @@
 <script setup lang="ts">
-import { tutorials } from '@/features/tutorials/tutorialRegistry'
+import { tutorials } from "@/features/tutorials/tutorialRegistry";
 </script>
 
 <template>
   <section class="tutorials-page">
     <div class="tutorials-container">
       <header class="tutorials-header">
-        <p class="eyebrow">
-          Learn DevCanvas
-        </p>
+        <p class="eyebrow">Learn DevCanvas</p>
 
-        <h1>
-          Tutorials
-        </h1>
+        <h1>Tutorials</h1>
 
         <p class="subtitle">
-          Learn diagramming concepts and open
-          every example directly in the editor.
+          Learn diagramming concepts and open every example directly in the editor.
         </p>
       </header>
 
       <div class="tutorials-grid">
-        <article
-          v-for="tutorial in tutorials"
-          :key="tutorial.slug"
-          class="tutorial-card"
-        >
+        <article v-for="tutorial in tutorials" :key="tutorial.slug" class="tutorial-card">
           <div class="tutorial-card-content">
             <h2>
               {{ tutorial.title }}
@@ -94,8 +85,7 @@ h1 {
 
 .tutorials-grid {
   display: grid;
-  grid-template-columns:
-    repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 24px;
 }
 

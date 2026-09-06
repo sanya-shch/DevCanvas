@@ -207,7 +207,7 @@ function renderNode(node: DiagramNode, document: DiagramDocument, colors: Export
   const centerX = layout.x + layout.width / 2;
   const centerY = layout.y + layout.height / 2;
 
-  let shape = "";
+  let shape;
 
   switch (node.shape) {
     case "rounded":

@@ -1,45 +1,39 @@
 <script setup lang="ts">
-import { storeToRefs } from 'pinia'
+import { storeToRefs } from "pinia";
 
-import {
-  useThemeStore,
-  type Theme,
-} from '@/stores/theme'
+import { useThemeStore, type Theme } from "@/stores/theme";
 
-const themeStore = useThemeStore()
-
-const { theme } = storeToRefs(themeStore)
+const themeStore = useThemeStore();
+const { theme } = storeToRefs(themeStore);
 
 const themes: Array<{
-  value: Theme
-  label: string
+  value: Theme;
+  label: string;
 }> = [
   {
-    value: 'dark',
-    label: 'Dark',
+    value: "dark",
+    label: "Dark",
   },
   {
-    value: 'light',
-    label: 'Light',
+    value: "light",
+    label: "Light",
   },
   {
-    value: 'midnight',
-    label: 'Midnight',
+    value: "midnight",
+    label: "Midnight",
   },
-]
+];
 
 function handleChange(event: Event) {
-  const value = (event.target as HTMLSelectElement).value
+  const value = (event.target as HTMLSelectElement).value;
 
-  themeStore.setTheme(value as Theme)
+  themeStore.setTheme(value as Theme);
 }
 </script>
 
 <template>
   <label class="theme-switcher">
-    <span class="theme-switcher__label">
-      Theme
-    </span>
+    <span class="sr-only"> Theme </span>
 
     <select
       :value="theme"
@@ -47,11 +41,7 @@ function handleChange(event: Event) {
       aria-label="Select theme"
       @change="handleChange"
     >
-      <option
-        v-for="item in themes"
-        :key="item.value"
-        :value="item.value"
-      >
+      <option v-for="item in themes" :key="item.value" :value="item.value">
         {{ item.label }}
       </option>
     </select>
@@ -91,5 +81,17 @@ function handleChange(event: Event) {
 .theme-switcher__select:focus-visible {
   outline: 2px solid var(--accent-color);
   outline-offset: 1px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 </style>

@@ -204,7 +204,7 @@ describe("exportDiagramToSvg", () => {
 
     expect(viewBox).toBeDefined();
 
-    const [minX, _minY, width, height] = viewBox!.split(/\s+/).map(Number);
+    const [minX, , width, height] = viewBox!.split(/\s+/).map(Number);
 
     expect(minX).toBeLessThan(0);
     expect(width).toBeGreaterThan(400);

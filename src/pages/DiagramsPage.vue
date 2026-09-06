@@ -1,43 +1,38 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { onMounted } from "vue";
+import { useRouter } from "vue-router";
 
-import { useDiagramsStore } from '@/stores/diagrams'
+import { useDiagramsStore } from "@/stores/diagrams";
 
-const router = useRouter()
-const diagramsStore = useDiagramsStore()
+const router = useRouter();
+const diagramsStore = useDiagramsStore();
 
 onMounted(() => {
-  diagramsStore.loadDiagrams()
-})
+  diagramsStore.loadDiagrams();
+});
 
 function openDiagram(id: string) {
   router.push({
-    path: '/editor',
+    path: "/editor",
     query: { id },
-  })
+  });
 }
 
 async function deleteDiagram(id: string) {
-  const confirmed = window.confirm(
-    'Delete this diagram?',
-  )
+  const confirmed = window.confirm("Delete this diagram?");
 
   if (!confirmed) {
-    return
+    return;
   }
 
-  await diagramsStore.removeDiagram(id)
+  await diagramsStore.removeDiagram(id);
 }
 
 function formatDate(timestamp: number) {
-  return new Intl.DateTimeFormat(
-    undefined,
-    {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    },
-  ).format(timestamp)
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(timestamp);
 }
 </script>
 
@@ -46,62 +41,33 @@ function formatDate(timestamp: number) {
     <header class="diagrams-header">
       <div>
         <h1>My Diagrams</h1>
-        <p>
-          Your diagrams saved locally in this browser.
-        </p>
+        <p>Your diagrams saved locally in this browser.</p>
       </div>
 
-      <RouterLink
-        to="/editor"
-        class="new-diagram-button"
-      >
-        New Diagram
-      </RouterLink>
+      <RouterLink to="/editor" class="new-diagram-button"> New Diagram </RouterLink>
     </header>
 
-    <div
-      v-if="diagramsStore.isLoading"
-      class="diagrams-state"
-    >
-      Loading diagrams...
-    </div>
+    <div v-if="diagramsStore.isLoading" class="diagrams-state">Loading diagrams...</div>
 
-    <div
-      v-else-if="diagramsStore.error"
-      class="diagrams-state diagrams-state--error"
-    >
+    <div v-else-if="diagramsStore.error" class="diagrams-state diagrams-state--error">
       {{ diagramsStore.error }}
     </div>
 
-    <div
-      v-else-if="diagramsStore.sortedDiagrams.length === 0"
-      class="diagrams-state"
-    >
+    <div v-else-if="diagramsStore.sortedDiagrams.length === 0" class="diagrams-state">
       <h2>No diagrams yet</h2>
 
-      <p>
-        Create your first diagram in the editor.
-      </p>
+      <p>Create your first diagram in the editor.</p>
 
-      <RouterLink to="/editor">
-        Create diagram
-      </RouterLink>
+      <RouterLink to="/editor"> Create diagram </RouterLink>
     </div>
 
-    <div
-      v-else
-      class="diagram-grid"
-    >
+    <div v-else class="diagram-grid">
       <article
         v-for="diagram in diagramsStore.sortedDiagrams"
         :key="diagram.id"
         class="diagram-card"
       >
-        <button
-          type="button"
-          class="diagram-card__content"
-          @click="openDiagram(diagram.id)"
-        >
+        <button type="button" class="diagram-card__content" @click="openDiagram(diagram.id)">
           <h2>{{ diagram.title }}</h2>
 
           <p>
@@ -110,11 +76,7 @@ function formatDate(timestamp: number) {
           </p>
         </button>
 
-        <button
-          type="button"
-          class="diagram-card__delete"
-          @click="deleteDiagram(diagram.id)"
-        >
+        <button type="button" class="diagram-card__delete" @click="deleteDiagram(diagram.id)">
           Delete
         </button>
       </article>
@@ -174,8 +136,7 @@ function formatDate(timestamp: number) {
 
 .diagram-grid {
   display: grid;
-  grid-template-columns:
-    repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 16px;
 }
 

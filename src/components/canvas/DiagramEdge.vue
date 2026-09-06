@@ -1,73 +1,57 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed } from "vue";
 
-import {
-  routeEdge,
-} from '@/features/diagram/edgeRouter'
+import { routeEdge } from "@/features/diagram/edgeRouter";
 
-import type {
-  DiagramEdge,
-  DiagramLayout,
-} from '@/features/diagram/types'
+import type { DiagramEdge, DiagramLayout } from "@/features/diagram/types";
 
 const props = defineProps<{
-  edge: DiagramEdge
-  layout: DiagramLayout
-  levels: Map<string, number>
-  direction: 'LR' | 'TD'
-}>()
+  edge: DiagramEdge;
+  layout: DiagramLayout;
+  levels: Map<string, number>;
+  direction: "LR" | "TD";
+}>();
 
 const route = computed(() => {
-  return routeEdge(
-    props.edge,
-    props.layout,
-    props.levels,
-    props.direction,
-  )
-})
+  return routeEdge(props.edge, props.layout, props.levels, props.direction);
+});
 
 const pathData = computed(() => {
   if (!route.value) {
-    return null
+    return null;
   }
 
   return route.value.points
     .map((point, index) => {
-      const command = index === 0 ? 'M' : 'L'
+      const command = index === 0 ? "M" : "L";
 
-      return `${command} ${point.x} ${point.y}`
+      return `${command} ${point.x} ${point.y}`;
     })
-    .join(' ')
-})
+    .join(" ");
+});
 
 const labelPosition = computed(() => {
   if (!route.value) {
-    return null
+    return null;
   }
 
-  const points = route.value.points
+  const points = route.value.points;
 
-  const middleIndex = Math.floor(
-    (points.length - 1) / 2,
-  )
+  const middleIndex = Math.floor((points.length - 1) / 2);
 
-  const start = points[middleIndex]
-  const end = points[middleIndex + 1]
+  const start = points[middleIndex];
+  const end = points[middleIndex + 1];
 
   return {
     x: (start.x + end.x) / 2,
     y: (start.y + end.y) / 2,
-  }
-})
+  };
+});
 </script>
 
 <template>
   <g v-if="pathData">
-    <path
-      :d="pathData"
-      class="diagram-edge"
-      marker-end="url(#arrow)"
-    />
+    <path :d="pathData" class="diagram-edge" marker-end="url(#arrow)" />
 
     <text
       v-if="edge.label && labelPosition"

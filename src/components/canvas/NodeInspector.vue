@@ -1,44 +1,32 @@
 <script setup lang="ts">
-import {
-  computed,
-  ref,
-  watch,
-} from 'vue'
+import { computed, ref, watch } from "vue";
 
-import {
-  useEditorStore,
-} from '@/stores/editor'
+import { useEditorStore } from "@/stores/editor";
 import type { NodeShape } from "@/features/diagram/types";
 
-const store = useEditorStore()
+const store = useEditorStore();
 
 // -----------------------------------------------------------------------------
 // Selected node
 // -----------------------------------------------------------------------------
 
-const node =
-  computed(() => {
-    return store.selectedNode
-  })
+const node = computed(() => {
+  return store.selectedNode;
+});
 
-const layout =
-  computed(() => {
-    if (!node.value) {
-      return null
-    }
+const layout = computed(() => {
+  if (!node.value) {
+    return null;
+  }
 
-    return (
-      store.document.layout[
-        node.value.id
-      ] ?? null
-    )
-  })
+  return store.document.layout[node.value.id] ?? null;
+});
 
 // -----------------------------------------------------------------------------
 // Local form state
 // -----------------------------------------------------------------------------
 
-const label = ref('')
+const label = ref("");
 
 const nodeShapes: Array<{
   value: NodeShape;
@@ -64,17 +52,12 @@ const nodeShapes: Array<{
 
 function updateShape(event: Event) {
   if (!node.value) {
-    return
+    return;
   }
 
-  const shape = (
-    event.target as HTMLSelectElement
-  ).value as NodeShape
+  const shape = (event.target as HTMLSelectElement).value as NodeShape;
 
-  store.updateNodeShape(
-    node.value.id,
-    shape,
-  )
+  store.updateNodeShape(node.value.id, shape);
 }
 
 // -----------------------------------------------------------------------------
@@ -84,59 +67,43 @@ function updateShape(event: Event) {
 watch(
   [node, layout],
   () => {
-    if (
-      !node.value ||
-      !layout.value
-    ) {
-      label.value = ''
+    if (!node.value || !layout.value) {
+      label.value = "";
 
-      return
+      return;
     }
 
-    label.value =
-      node.value.label
+    label.value = node.value.label;
   },
   {
     immediate: true,
   },
-)
+);
 
 // -----------------------------------------------------------------------------
 // Validation
 // -----------------------------------------------------------------------------
 
-const canApply =
-  computed(() => {
-    return Boolean(
-      node.value &&
-        layout.value &&
-        label.value.trim(),
-    )
-  })
+const canApply = computed(() => {
+  return Boolean(node.value && layout.value && label.value.trim());
+});
 
 // -----------------------------------------------------------------------------
 // Apply
 // -----------------------------------------------------------------------------
 
 function applyChanges() {
-  if (
-    !node.value ||
-    !layout.value
-  ) {
-    return
+  if (!node.value || !layout.value) {
+    return;
   }
 
-  const nextLabel =
-    label.value.trim()
+  const nextLabel = label.value.trim();
 
   if (!nextLabel) {
-    return
+    return;
   }
 
-  store.updateNodeLabel(
-    node.value.id,
-    nextLabel,
-  )
+  store.updateNodeLabel(node.value.id, nextLabel);
 }
 
 // -----------------------------------------------------------------------------
@@ -145,59 +112,39 @@ function applyChanges() {
 
 function deleteNode() {
   if (!node.value) {
-    return
+    return;
   }
 
-  store.deleteNode(
-    node.value.id,
-  )
+  store.deleteNode(node.value.id);
 }
 
 // -----------------------------------------------------------------------------
 // Keyboard
 // -----------------------------------------------------------------------------
 
-function handleKeyDown(
-  event: KeyboardEvent,
-) {
-  if (
-    (event.metaKey ||
-      event.ctrlKey) &&
-    event.key === 'Enter'
-  ) {
-    event.preventDefault()
+function handleKeyDown(event: KeyboardEvent) {
+  if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+    event.preventDefault();
 
-    applyChanges()
+    applyChanges();
   }
 }
 </script>
 
 <template>
   <aside class="node-inspector">
-    <div
-      v-if="!node || !layout"
-      class="empty-inspector"
-    >
-      <div class="empty-icon">
-        ⬡
-      </div>
+    <div v-if="!node || !layout" class="empty-inspector">
+      <div class="empty-icon">⬡</div>
 
-      <h3>
-        No node selected
-      </h3>
+      <h3>No node selected</h3>
 
-      <p>
-        Select a node on the canvas
-        to edit its properties.
-      </p>
+      <p>Select a node on the canvas to edit its properties.</p>
     </div>
 
     <template v-else>
       <div class="inspector-header">
         <div>
-          <span class="eyebrow">
-            Node
-          </span>
+          <span class="eyebrow"> Node </span>
 
           <h2>
             {{ node.label }}
@@ -208,9 +155,7 @@ function handleKeyDown(
           type="button"
           class="close-button"
           title="Deselect node"
-          @click="
-            store.selectNode(null)
-          "
+          @click="store.selectNode(null)"
         >
           ×
         </button>
@@ -218,23 +163,13 @@ function handleKeyDown(
 
       <div class="inspector-content">
         <div class="field">
-          <label for="node-id">
-            Internal ID
-          </label>
+          <label for="node-id"> Internal ID </label>
 
-          <input
-            id="node-id"
-            :value="node.id"
-            type="text"
-            readonly
-            class="readonly"
-          />
+          <input id="node-id" :value="node.id" type="text" readonly class="readonly" />
         </div>
 
         <div class="field">
-          <label for="node-label">
-            Label
-          </label>
+          <label for="node-label"> Label </label>
 
           <input
             id="node-label"
@@ -246,23 +181,15 @@ function handleKeyDown(
         </div>
 
         <div class="section">
-          <div class="section-title">
-            Position
-          </div>
+          <div class="section-title">Position</div>
 
           <div class="field-grid">
             <div class="field">
-              <label for="node-x">
-                X
-              </label>
+              <label for="node-x"> X </label>
 
               <input
                 id="node-x"
-                :value="
-                  Math.round(
-                    layout.x,
-                  )
-                "
+                :value="Math.round(layout.x)"
                 type="number"
                 readonly
                 class="readonly"
@@ -270,17 +197,11 @@ function handleKeyDown(
             </div>
 
             <div class="field">
-              <label for="node-y">
-                Y
-              </label>
+              <label for="node-y"> Y </label>
 
               <input
                 id="node-y"
-                :value="
-                  Math.round(
-                    layout.y,
-                  )
-                "
+                :value="Math.round(layout.y)"
                 type="number"
                 readonly
                 class="readonly"
@@ -290,23 +211,15 @@ function handleKeyDown(
         </div>
 
         <div class="section">
-          <div class="section-title">
-            Size
-          </div>
+          <div class="section-title">Size</div>
 
           <div class="field-grid">
             <div class="field">
-              <label for="node-width">
-                Width
-              </label>
+              <label for="node-width"> Width </label>
 
               <input
                 id="node-width"
-                :value="
-                  Math.round(
-                    layout.width,
-                  )
-                "
+                :value="Math.round(layout.width)"
                 type="number"
                 readonly
                 class="readonly"
@@ -314,17 +227,11 @@ function handleKeyDown(
             </div>
 
             <div class="field">
-              <label for="node-height">
-                Height
-              </label>
+              <label for="node-height"> Height </label>
 
               <input
                 id="node-height"
-                :value="
-                  Math.round(
-                    layout.height,
-                  )
-                "
+                :value="Math.round(layout.height)"
                 type="number"
                 readonly
                 class="readonly"
@@ -332,53 +239,25 @@ function handleKeyDown(
             </div>
           </div>
 
-          <p class="size-hint">
-            Size is calculated
-            automatically from the
-            label.
-          </p>
+          <p class="size-hint">Size is calculated automatically from the label.</p>
         </div>
 
-        <div
-          v-if="node"
-          class="inspector-field"
-        >
-          <label for="node-shape">
-            Shape
-          </label>
+        <div v-if="node" class="inspector-field">
+          <label for="node-shape"> Shape </label>
 
-          <select
-            id="node-shape"
-            :value="node.shape"
-            @change="updateShape"
-          >
-            <option
-              v-for="shape in nodeShapes"
-              :key="shape.value"
-              :value="shape.value"
-            >
+          <select id="node-shape" :value="node.shape" @change="updateShape">
+            <option v-for="shape in nodeShapes" :key="shape.value" :value="shape.value">
               {{ shape.label }}
             </option>
           </select>
         </div>
 
         <div class="actions">
-          <button
-            type="button"
-            class="primary-button"
-            :disabled="!canApply"
-            @click="applyChanges"
-          >
+          <button type="button" class="primary-button" :disabled="!canApply" @click="applyChanges">
             Apply changes
           </button>
 
-          <button
-            type="button"
-            class="danger-button"
-            @click="deleteNode"
-          >
-            Delete node
-          </button>
+          <button type="button" class="danger-button" @click="deleteNode">Delete node</button>
         </div>
       </div>
     </template>
@@ -580,9 +459,7 @@ function handleKeyDown(
 .field input:focus {
   border-color: var(--accent-color);
 
-  box-shadow:
-    0 0 0 2px
-    var(--accent-color-alpha);
+  box-shadow: 0 0 0 2px var(--accent-color-alpha);
 }
 
 .field input.readonly {

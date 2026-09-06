@@ -1,45 +1,29 @@
 <script setup lang="ts">
-import { RouterLink } from 'vue-router'
+import { RouterLink } from "vue-router";
+
+import ThemeSwitcher from "@/components/theme/ThemeSwitcher.vue";
 </script>
 
 <template>
   <header class="app-header">
     <div class="header-inner">
-      <RouterLink
-        to="/"
-        class="brand"
-      >
-        <span class="brand-mark">
-          ◆
-        </span>
+      <RouterLink to="/" class="brand">
+        <span class="brand-mark"> ◆ </span>
 
-        <span class="brand-name">
-          DevCanvas
-        </span>
+        <span class="brand-name"> DevCanvas </span>
       </RouterLink>
 
-      <nav class="navigation">
-        <RouterLink
-          to="/editor"
-          class="nav-link"
-        >
-          Editor
-        </RouterLink>
+      <div class="header-actions">
+        <nav class="navigation">
+          <RouterLink to="/editor" class="nav-link"> Editor </RouterLink>
 
-        <RouterLink
-          to="/diagrams"
-          class="nav-link"
-        >
-          Diagrams
-        </RouterLink>
+          <RouterLink to="/diagrams" class="nav-link"> Diagrams </RouterLink>
 
-        <RouterLink
-          to="/tutorials"
-          class="nav-link"
-        >
-          Tutorials
-        </RouterLink>
-      </nav>
+          <RouterLink to="/tutorials" class="nav-link"> Tutorials </RouterLink>
+        </nav>
+
+        <ThemeSwitcher />
+      </div>
     </div>
   </header>
 </template>
@@ -127,5 +111,21 @@ import { RouterLink } from 'vue-router'
 .nav-link.router-link-active {
   background: var(--panel-background);
   color: var(--text-primary);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+@media (max-width: 720px) {
+  .header-actions {
+    gap: 12px;
+  }
+
+  .navigation {
+    display: none;
+  }
 }
 </style>

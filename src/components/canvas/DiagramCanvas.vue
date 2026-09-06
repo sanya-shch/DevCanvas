@@ -1,26 +1,16 @@
 <script setup lang="ts">
-import {
-  computed,
-  nextTick,
-  onBeforeUnmount,
-  onMounted,
-  ref,
-} from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 
-import { useEditorStore } from '@/stores/editor'
-import {
-  calculateLevels,
-} from '@/features/diagram/layout'
-import DiagramNode from './DiagramNode.vue'
-import DiagramEdge from './DiagramEdge.vue'
+import { useEditorStore } from "@/stores/editor";
+import { calculateLevels } from "@/features/diagram/layout";
+import DiagramNode from "./DiagramNode.vue";
+import DiagramEdge from "./DiagramEdge.vue";
 
-const store = useEditorStore()
+const store = useEditorStore();
 
-const canvasRef =
-  ref<SVGSVGElement | null>(null)
+const canvasRef = ref<SVGSVGElement | null>(null);
 
-const viewportRef =
-  ref<HTMLElement | null>(null)
+const viewportRef = ref<HTMLElement | null>(null);
 
 function releasePointerCapture(event: PointerEvent) {
   const element = canvasRef.value;
@@ -40,41 +30,40 @@ function releasePointerCapture(event: PointerEvent) {
 
   try {
     element.releasePointerCapture(event.pointerId);
-  } catch {}
+  } catch {
+    // ignore error
+  }
 }
 
 const levels = computed(() => {
-  return calculateLevels(
-    store.document.nodes,
-    store.document.edges,
-  )
-})
+  return calculateLevels(store.document.nodes, store.document.edges);
+});
 
 // -----------------------------------------------------------------------------
 // Node dragging
 // -----------------------------------------------------------------------------
 
-const isDraggingNode = ref(false)
+const isDraggingNode = ref(false);
 
-const draggingNodeId = ref<string | null>(null)
+const draggingNodeId = ref<string | null>(null);
 
 const dragStart = ref({
   x: 0,
   y: 0,
-})
+});
 
 const nodeStart = ref({
   x: 0,
   y: 0,
-})
+});
 
 /**
  * Pointer movement below this threshold
  * is treated as a click rather than a drag.
  */
-const DRAG_THRESHOLD = 4
+const DRAG_THRESHOLD = 4;
 
-const didDragNode = ref(false)
+const didDragNode = ref(false);
 
 /**
  * Pointer capture causes the click event to
@@ -84,29 +73,25 @@ const didDragNode = ref(false)
  * We suppress only the click generated after
  * an actual drag, never after a simple click.
  */
-const suppressNextCanvasClick =
-  ref(false)
+const suppressNextCanvasClick = ref(false);
 
-let activePointerId:
-  | number
-  | null = null
+let activePointerId: number | null = null;
 
 // -----------------------------------------------------------------------------
 // Canvas panning
 // -----------------------------------------------------------------------------
 
-const isPanning =
-  ref(false)
+const isPanning = ref(false);
 
 const panStart = ref({
   x: 0,
   y: 0,
-})
+});
 
 const panStartOffset = ref({
   x: 0,
   y: 0,
-})
+});
 
 // -----------------------------------------------------------------------------
 // Computed
@@ -116,107 +101,84 @@ const transform = computed(() => {
   return `
     translate(${store.offset.x} ${store.offset.y})
     scale(${store.zoom})
-  `
-})
+  `;
+});
 
 // -----------------------------------------------------------------------------
 // Node dragging
 // -----------------------------------------------------------------------------
 
-function startNodeDrag(
-  event: PointerEvent,
-  nodeId: string,
-) {
+function startNodeDrag(event: PointerEvent, nodeId: string) {
   if (event.button !== 0) {
-    return
+    return;
   }
 
-  const layout = store.document.layout[nodeId]
+  const layout = store.document.layout[nodeId];
 
   if (!layout) {
-    return
+    return;
   }
 
-  event.stopPropagation()
+  event.stopPropagation();
 
-  store.selectNode(nodeId)
+  store.selectNode(nodeId);
 
-  draggingNodeId.value = nodeId
-  didDragNode.value = false
-  activePointerId = event.pointerId
+  draggingNodeId.value = nodeId;
+  didDragNode.value = false;
+  activePointerId = event.pointerId;
 
   dragStart.value = {
     x: event.clientX,
     y: event.clientY,
-  }
+  };
 
   nodeStart.value = {
     x: layout.x,
     y: layout.y,
-  }
+  };
 }
 
 function moveNode(event: PointerEvent) {
   if (!draggingNodeId.value) {
-    return
+    return;
   }
 
-  if (
-    activePointerId !== null &&
-    event.pointerId !== activePointerId
-  ) {
-    return
+  if (activePointerId !== null && event.pointerId !== activePointerId) {
+    return;
   }
 
-  const rawDx =
-    event.clientX - dragStart.value.x
+  const rawDx = event.clientX - dragStart.value.x;
 
-  const rawDy =
-    event.clientY - dragStart.value.y
+  const rawDy = event.clientY - dragStart.value.y;
 
   if (!didDragNode.value) {
-    const distance = Math.hypot(
-      rawDx,
-      rawDy,
-    )
+    const distance = Math.hypot(rawDx, rawDy);
 
     if (distance < DRAG_THRESHOLD) {
-      return
+      return;
     }
 
-    didDragNode.value = true
-    isDraggingNode.value = true
+    didDragNode.value = true;
+    isDraggingNode.value = true;
 
-    store.beginHistoryTransaction()
+    store.beginHistoryTransaction();
 
     try {
-      canvasRef.value?.setPointerCapture(
-        event.pointerId,
-      )
+      canvasRef.value?.setPointerCapture(event.pointerId);
     } catch {
       // Pointer capture may not be available.
     }
   }
 
-  const dx =
-    rawDx / store.zoom
+  const dx = rawDx / store.zoom;
 
-  const dy =
-    rawDy / store.zoom
+  const dy = rawDy / store.zoom;
 
-  store.updateNodePosition(
-    draggingNodeId.value,
-    nodeStart.value.x + dx,
-    nodeStart.value.y + dy,
-  )
+  store.updateNodePosition(draggingNodeId.value, nodeStart.value.x + dx, nodeStart.value.y + dy);
 }
 
 function stopNodeDrag(event?: PointerEvent) {
-  if (
-    event &&
-    activePointerId !== null &&
-    event.pointerId !== activePointerId
-  ) {
+  if (event && activePointerId !== null && event.pointerId !== activePointerId) {
     return;
   }
 
@@ -239,9 +201,7 @@ function stopNodeDrag(event?: PointerEvent) {
 // Canvas click
 // -----------------------------------------------------------------------------
 
-function handleCanvasClick(
-  event: MouseEvent,
-) {
+function handleCanvasClick(event: MouseEvent) {
   /**
    * Pointer capture can make the click event
    * target the SVG after a drag.
@@ -250,18 +210,15 @@ function handleCanvasClick(
    * the node.
    */
   if (suppressNextCanvasClick.value) {
-    suppressNextCanvasClick.value = false
-    return
+    suppressNextCanvasClick.value = false;
+    return;
   }
 
   /**
    * Clicking the empty canvas deselects the node.
    */
-  if (
-    event.target ===
-    event.currentTarget
-  ) {
-    store.selectNode(null)
+  if (event.target === event.currentTarget) {
+    store.selectNode(null);
   }
 }
 
@@ -269,79 +226,56 @@ function handleCanvasClick(
 // Canvas panning
 // -----------------------------------------------------------------------------
 
-function startPan(
-  event: PointerEvent,
-) {
+function startPan(event: PointerEvent) {
   if (event.button !== 0) {
-    return
+    return;
   }
 
   if (draggingNodeId.value) {
-    return
+    return;
   }
 
-  if (
-    event.target !==
-    event.currentTarget
-  ) {
-    return
+  if (event.target !== event.currentTarget) {
+    return;
   }
 
-  event.preventDefault()
+  event.preventDefault();
 
-  isPanning.value = true
+  isPanning.value = true;
 
   panStart.value = {
     x: event.clientX,
     y: event.clientY,
-  }
+  };
 
   panStartOffset.value = {
     x: store.offset.x,
     y: store.offset.y,
-  }
+  };
 
-  activePointerId =
-    event.pointerId
+  activePointerId = event.pointerId;
 
   try {
-    canvasRef.value?.setPointerCapture(
-      event.pointerId,
-    )
+    canvasRef.value?.setPointerCapture(event.pointerId);
   } catch {
     // Pointer capture is not critical.
   }
 }
 
-function movePan(
-  event: PointerEvent,
-) {
+function movePan(event: PointerEvent) {
   if (!isPanning.value) {
-    return
+    return;
   }
 
-  const dx =
-    event.clientX -
-    panStart.value.x
+  const dx = event.clientX - panStart.value.x;
 
-  const dy =
-    event.clientY -
-    panStart.value.y
+  const dy = event.clientY - panStart.value.y;
 
-  store.setOffset(
-    panStartOffset.value.x +
-      dx,
-    panStartOffset.value.y +
-      dy,
-  )
+  store.setOffset(panStartOffset.value.x + dx, panStartOffset.value.y + dy);
 }
 
 function stopPan(event?: PointerEvent) {
-  if (
-    event &&
-    activePointerId !== null &&
-    event.pointerId !== activePointerId
-  ) {
+  if (event && activePointerId !== null && event.pointerId !== activePointerId) {
     return;
   }
 
@@ -357,42 +291,36 @@ function stopPan(event?: PointerEvent) {
 // Pointer events
 // -----------------------------------------------------------------------------
 
-function handlePointerMove(
-  event: PointerEvent,
-) {
+function handlePointerMove(event: PointerEvent) {
   if (draggingNodeId.value) {
-    moveNode(event)
-    return
+    moveNode(event);
+    return;
   }
 
   if (isPanning.value) {
-    movePan(event)
+    movePan(event);
   }
 }
 
-function handlePointerUp(
-  event: PointerEvent,
-) {
+function handlePointerUp(event: PointerEvent) {
   if (draggingNodeId.value) {
-    stopNodeDrag(event)
-    return
+    stopNodeDrag(event);
+    return;
   }
 
   if (isPanning.value) {
-    stopPan(event)
+    stopPan(event);
   }
 }
 
-function handlePointerCancel(
-  event: PointerEvent,
-) {
+function handlePointerCancel(event: PointerEvent) {
   if (draggingNodeId.value) {
-    stopNodeDrag(event)
-    return
+    stopNodeDrag(event);
+    return;
   }
 
   if (isPanning.value) {
-    stopPan(event)
+    stopPan(event);
   }
 }
 
@@ -400,126 +328,81 @@ function handlePointerCancel(
 // Zoom
 // -----------------------------------------------------------------------------
 
-function zoomAtPoint(
-  newZoom: number,
-  clientX: number,
-  clientY: number,
-) {
-  const svg =
-    canvasRef.value
+function zoomAtPoint(newZoom: number, clientX: number, clientY: number) {
+  const svg = canvasRef.value;
 
   if (!svg) {
-    store.setZoom(newZoom)
-    return
+    store.setZoom(newZoom);
+    return;
   }
 
-  const rect =
-    svg.getBoundingClientRect()
+  const rect = svg.getBoundingClientRect();
 
-  const mouseX =
-    clientX - rect.left
+  const mouseX = clientX - rect.left;
 
-  const mouseY =
-    clientY - rect.top
+  const mouseY = clientY - rect.top;
 
-  const oldZoom =
-    store.zoom
+  const oldZoom = store.zoom;
 
-  const worldX =
-    (mouseX -
-      store.offset.x) /
-    oldZoom
+  const worldX = (mouseX - store.offset.x) / oldZoom;
 
-  const worldY =
-    (mouseY -
-      store.offset.y) /
-    oldZoom
+  const worldY = (mouseY - store.offset.y) / oldZoom;
 
-  store.setZoom(newZoom)
+  store.setZoom(newZoom);
 
-  const actualZoom =
-    store.zoom
+  const actualZoom = store.zoom;
 
-  store.setOffset(
-    mouseX -
-      worldX * actualZoom,
-    mouseY -
-      worldY * actualZoom,
-  )
+  store.setOffset(mouseX - worldX * actualZoom, mouseY - worldY * actualZoom);
 }
 
-function handleWheel(
-  event: WheelEvent,
-) {
-  event.preventDefault()
+function handleWheel(event: WheelEvent) {
+  event.preventDefault();
 
-  const zoomFactor =
-    event.deltaY > 0
-      ? 0.9
-      : 1.1
+  const zoomFactor = event.deltaY > 0 ? 0.9 : 1.1;
 
-  const newZoom =
-    store.zoom * zoomFactor
+  const newZoom = store.zoom * zoomFactor;
 
-  zoomAtPoint(
-    newZoom,
-    event.clientX,
-    event.clientY,
-  )
+  zoomAtPoint(newZoom, event.clientX, event.clientY);
 }
 
 async function fitToScreen() {
-  await nextTick()
+  await nextTick();
 
-  const viewport =
-    viewportRef.value
+  const viewport = viewportRef.value;
 
   if (!viewport) {
-    return
+    return;
   }
 
-  store.fitToScreen(
-    viewport.clientWidth,
-    viewport.clientHeight,
-  )
+  store.fitToScreen(viewport.clientWidth, viewport.clientHeight);
 }
 
 // -----------------------------------------------------------------------------
 // Keyboard
 // -----------------------------------------------------------------------------
 
-function handleKeyDown(
-  event: KeyboardEvent,
-) {
-  const target =
-    event.target as HTMLElement | null
+function handleKeyDown(event: KeyboardEvent) {
+  const target = event.target as HTMLElement | null;
 
   const isInput =
-    target?.tagName === 'INPUT' ||
-    target?.tagName === 'TEXTAREA' ||
-    target?.isContentEditable
+    target?.tagName === "INPUT" || target?.tagName === "TEXTAREA" || target?.isContentEditable;
 
   if (isInput) {
-    return
+    return;
   }
 
-  const modifier =
-    event.metaKey ||
-    event.ctrlKey
+  const modifier = event.metaKey || event.ctrlKey;
 
-  if (
-    modifier &&
-    event.key === '0'
-  ) {
-    event.preventDefault()
+  if (modifier && event.key === "0") {
+    event.preventDefault();
 
-    store.resetViewport()
+    store.resetViewport();
 
-    return
+    return;
   }
 
-  if (event.key === 'Escape') {
-    store.selectNode(null)
+  if (event.key === "Escape") {
+    store.selectNode(null);
   }
 }
 
@@ -528,62 +411,27 @@ function handleKeyDown(
 // -----------------------------------------------------------------------------
 
 onMounted(() => {
-  window.addEventListener(
-    'keydown',
-    handleKeyDown,
-  )
-})
+  window.addEventListener("keydown", handleKeyDown);
+});
 
 onBeforeUnmount(() => {
-  window.removeEventListener(
-    'keydown',
-    handleKeyDown,
-  )
+  window.removeEventListener("keydown", handleKeyDown);
 
-  stopNodeDrag()
-  stopPan()
-})
+  stopNodeDrag();
+  stopPan();
+});
 </script>
 
 <template>
-  <div
-    ref="viewportRef"
-    class="diagram-canvas"
-  >
-    <div
-      class="zoom-controls"
-      @pointerdown.stop
-      @pointermove.stop
-      @pointerup.stop
-      @wheel.stop
-    >
-      <button
-        type="button"
-        title="Zoom out"
-        @click="store.zoomOut()"
-      >
-        −
-      </button>
+  <div ref="viewportRef" class="diagram-canvas">
+    <div class="zoom-controls" @pointerdown.stop @pointermove.stop @pointerup.stop @wheel.stop>
+      <button type="button" title="Zoom out" @click="store.zoomOut()">−</button>
 
-      <span class="zoom-value">
-        {{ Math.round(store.zoom * 100) }}%
-      </span>
+      <span class="zoom-value"> {{ Math.round(store.zoom * 100) }}% </span>
 
-      <button
-        type="button"
-        title="Zoom in"
-        @click="store.zoomIn()"
-      >
-        +
-      </button>
+      <button type="button" title="Zoom in" @click="store.zoomIn()">+</button>
 
-      <button
-        type="button"
-        title="Fit diagram"
-        @click="fitToScreen"
-      >
-        Fit
-      </button>
+      <button type="button" title="Fit diagram" @click="fitToScreen">Fit</button>
     </div>
 
     <svg
@@ -606,10 +454,7 @@ onBeforeUnmount(() => {
           orient="auto"
           markerUnits="strokeWidth"
         >
-          <path
-            d="M0,0 L0,6 L9,3 z"
-            class="arrow-head"
-          />
+          <path d="M0,0 L0,6 L9,3 z" class="arrow-head" />
         </marker>
 
         <pattern
@@ -617,29 +462,15 @@ onBeforeUnmount(() => {
           width="24"
           height="24"
           patternUnits="userSpaceOnUse"
-          :patternTransform="
-            `translate(${store.offset.x % 24} ${store.offset.y % 24})`
-          "
+          :patternTransform="`translate(${store.offset.x % 24} ${store.offset.y % 24})`"
         >
-          <circle
-            cx="1"
-            cy="1"
-            r="1"
-            class="grid-dot"
-          />
+          <circle cx="1" cy="1" r="1" class="grid-dot" />
         </pattern>
       </defs>
 
-      <rect
-        width="100%"
-        height="100%"
-        fill="url(#grid)"
-        pointer-events="none"
-      />
+      <rect width="100%" height="100%" fill="url(#grid)" pointer-events="none" />
 
-      <g
-        :transform="transform"
-      >
+      <g :transform="transform">
         <DiagramEdge
           v-for="edge in store.document.edges"
           :key="edge.id"
@@ -661,29 +492,15 @@ onBeforeUnmount(() => {
       </g>
     </svg>
 
-    <div
-      v-if="!store.document.nodes.length"
-      class="empty-state"
-    >
+    <div v-if="!store.document.nodes.length" class="empty-state">
       <p>No nodes yet</p>
 
-      <span>
-        Create a diagram in the editor
-      </span>
+      <span> Create a diagram in the editor </span>
     </div>
 
-    <div
-      v-if="store.hasErrors"
-      class="error-panel"
-    >
-      <div
-        v-for="error in store.errors"
-        :key="`${error.line}-${error.message}`"
-        class="error"
-      >
-        <strong>
-          Line {{ error.line }}
-        </strong>
+    <div v-if="store.hasErrors" class="error-panel">
+      <div v-for="error in store.errors" :key="`${error.line}-${error.message}`" class="error">
+        <strong> Line {{ error.line }} </strong>
 
         <span>
           {{ error.message }}

@@ -143,6 +143,7 @@ export const useEditorStore = defineStore("editor", () => {
         }
       }
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error("Failed to save draft:", error);
     } finally {
       isSavingDraft = false;
@@ -176,6 +177,7 @@ export const useEditorStore = defineStore("editor", () => {
 
       return true;
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error("Failed to recover draft:", error);
       return false;
     }
@@ -191,6 +193,7 @@ export const useEditorStore = defineStore("editor", () => {
 
       return true;
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error("Failed to discard draft:", error);
       return false;
     }
@@ -202,6 +205,7 @@ export const useEditorStore = defineStore("editor", () => {
 
       return drafts.find((draft) => draft.diagramId === targetDiagramId) ?? null;
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error("Failed to load drafts:", error);
       return null;
     }
@@ -335,6 +339,7 @@ A["Start"] -> B["End"]
         }
       }
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error("Failed to save diagram:", error);
       autosaveError.value = "Failed to save diagram.";
     } finally {
@@ -562,6 +567,17 @@ A["Start"] -> B["End"]
 
   function setSource(value: string) {
     source.value = value;
+  }
+
+  function setDiagramTitle(value: string) {
+    const title = value.trim();
+
+    if (!title || diagramTitle.value === title) {
+      return;
+    }
+
+    diagramTitle.value = title;
+    markDirty();
   }
 
   // ---------------------------------------------------------------------------
@@ -860,13 +876,13 @@ A["Start"] -> B["End"]
   }
 
   const canUndo = computed(() => {
-    historyVersion.value;
+    void historyVersion.value;
 
     return history.canUndo;
   });
 
   const canRedo = computed(() => {
-    historyVersion.value;
+    void historyVersion.value;
 
     return history.canRedo;
   });
@@ -969,6 +985,7 @@ A["Start"] -> B["End"]
     isDirty,
     autosaveError,
     lastSavedAt,
+    setDiagramTitle,
 
     createNewDiagram,
     saveDiagram,

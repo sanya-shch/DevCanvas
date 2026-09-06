@@ -368,7 +368,6 @@ export function parseDiagram(source: string, previousDocument?: DiagramDocument)
 
   const lines = source.split(/\r?\n/);
 
-  let direction: DiagramDirection | null = null;
   let headerFound = false;
 
   const context: ParserContext = {
@@ -395,7 +394,7 @@ export function parseDiagram(source: string, previousDocument?: DiagramDocument)
     }
 
     if (!headerFound) {
-      direction = parseDirection(line, lineNumber, errors);
+      const direction = parseDirection(line, lineNumber, errors);
 
       if (!direction) {
         return {
