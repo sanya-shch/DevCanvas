@@ -16,8 +16,14 @@ import CodeEditor from '@/components/editor/CodeEditor.vue'
 import DiagramCanvas from '@/components/canvas/DiagramCanvas.vue'
 import NodeInspector from '@/components/canvas/NodeInspector.vue'
 import ThemeSwitcher from '@/components/theme/ThemeSwitcher.vue'
+import { exportDiagramToSvg } from '@/features/diagram/svgExporter'
+import { downloadSvg } from '@/features/diagram/svgDownload'
+import { downloadPng } from "@/features/diagram/pngDownload";
+import { useThemeStore } from '@/stores/theme'
 
 const store = useEditorStore()
+const themeStore = useThemeStore();
+
 const route = useRoute()
 const router = useRouter()
 
@@ -205,6 +211,58 @@ async function handleCreateNewDiagram() {
   store.createNewDiagram()
 }
 
+function sanitizeFilename(
+  value: string,
+): string {
+  return value
+    .trim()
+    .replace(/[<>:"/\\|?*]+/g, '-')
+    .replace(/\s+/g, '-')
+    || 'diagram'
+}
+
+function handleExportSvg() {
+  if (
+    store.hasErrors ||
+    !store.document.nodes.length
+  ) {
+    return
+  }
+
+  const svg = exportDiagramToSvg(
+    store.document,
+    themeStore.theme,
+  )
+
+  downloadSvg(
+    svg,
+    `${sanitizeFilename(store.diagramTitle)}.svg`,
+  )
+}
+
+async function handleExportPng() {
+  if (
+    store.hasErrors ||
+    !store.document.nodes.length
+  ) {
+    return;
+  }
+
+  const svg =
+    exportDiagramToSvg(
+      store.document,
+      themeStore.theme,
+    );
+
+  await downloadPng(
+    svg,
+    `${sanitizeFilename(store.diagramTitle)}.png`,
+    {
+      scale: 2,
+    },
+  );
+}
+
 onMounted(() => {
   window.addEventListener(
     'keydown',
@@ -299,6 +357,29 @@ onBeforeUnmount(() => {
           @click="store.saveDiagram"
         >
           Save
+        </button>
+
+        <button
+          type="button"
+          class="header-button"
+          :disabled="store.hasErrors || !store.document.nodes.length"
+          title="Export diagram as SVG"
+          @click="handleExportSvg"
+        >
+          Export SVG
+        </button>
+
+        <button
+          type="button"
+          class="header-button"
+          :disabled="
+            store.hasErrors ||
+            !store.document.nodes.length
+          "
+          title="Export diagram as PNG"
+          @click="handleExportPng"
+        >
+          Export PNG
         </button>
 
         <button
