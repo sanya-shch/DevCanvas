@@ -211,7 +211,21 @@ function handleKeyDown(
   }
 }
 
+function confirmDiscardChanges(): boolean {
+  if (!store.isDirty) {
+    return true
+  }
+
+  return window.confirm(
+    'You have unsaved changes. Are you sure you want to discard them?',
+  )
+}
+
 async function handleCreateNewDiagram() {
+  if (!confirmDiscardChanges()) {
+    return
+  }
+
   await router.replace({
     path: '/editor',
   })
@@ -286,17 +300,18 @@ async function handleImportDevCanvas() {
   }
 
   try {
-    const content =
-      await file.text();
+    const content = await file.text()
+    const imported = parseDevCanvasFile(content)
 
-    const imported =
-      parseDevCanvasFile(content);
+    if (!confirmDiscardChanges()) {
+      return
+    }
 
     store.loadDocument(
       imported.document,
       imported.title,
       imported.source,
-    );
+    )
   } catch (error) {
     const message =
       error instanceof Error
@@ -406,6 +421,15 @@ async function handleSave() {
   clearShareHash();
 }
 
+function handleBeforeUnload(event: BeforeUnloadEvent) {
+  if (!store.isDirty) {
+    return
+  }
+
+  event.preventDefault()
+  event.returnValue = ''
+}
+
 onMounted(async () => {
     const sharedDocument = getSharedDocument();
 
@@ -429,7 +453,12 @@ onMounted(async () => {
   window.addEventListener(
     'keydown',
     handleKeyDown,
-  )
+  );
+
+  window.addEventListener(
+    'beforeunload',
+    handleBeforeUnload,
+  );
 })
 
 onBeforeUnmount(() => {
@@ -446,6 +475,11 @@ onBeforeUnmount(() => {
     clearTimeout(parseTimeout)
     parseTimeout = null
   }
+
+  window.removeEventListener(
+    'beforeunload',
+    handleBeforeUnload,
+  );
 })
 </script>
 

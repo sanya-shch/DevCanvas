@@ -79,37 +79,50 @@ export const useEditorStore = defineStore("editor", () => {
     }, AUTOSAVE_DELAY);
   }
 
+  function cancelAutosave() {
+    if (autosaveTimeout !== null) {
+      clearTimeout(autosaveTimeout);
+      autosaveTimeout = null;
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Create new diagram
   // ---------------------------------------------------------------------------
 
   function createNewDiagram(title = "Untitled Diagram") {
-    diagramId.value = null;
-    diagramTitle.value = title;
-    lastSavedAt.value = null;
-    autosaveError.value = null;
+    isHydrating = true;
 
-    source.value = `flowchart LR
+    try {
+      diagramId.value = null;
+      diagramTitle.value = title;
+      lastSavedAt.value = null;
+      autosaveError.value = null;
+      isDirty.value = false;
+
+      source.value = `flowchart LR
 
 A["Start"] -> B["End"]
 `;
 
-    document.value = {
-      direction: "LR",
-      nodes: [],
-      edges: [],
-      layout: {},
-      sourceMap: {},
-    };
+      document.value = {
+        direction: "LR",
+        nodes: [],
+        edges: [],
+        layout: {},
+        sourceMap: {},
+      };
 
-    selectedNodeId.value = null;
+      selectedNodeId.value = null;
 
-    history.clear();
-    notifyHistoryChange();
+      history.clear();
+      notifyHistoryChange();
+      cancelAutosave();
 
-    parse();
-
-    markDirty();
+      parse();
+    } finally {
+      isHydrating = false;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -692,21 +705,32 @@ A["Start"] -> B["End"]
     title = "Untitled Diagram",
     nextSource?: string,
   ) {
-    diagramId.value = null;
-    diagramTitle.value = title;
-    lastSavedAt.value = null;
+    isHydrating = true;
 
-    document.value = cloneDocument(nextDocument);
+    try {
+      diagramId.value = null;
+      diagramTitle.value = title;
+      lastSavedAt.value = null;
+      autosaveError.value = null;
 
-    source.value = nextSource ?? serializeDiagram(document.value);
+      document.value = cloneDocument(nextDocument);
 
-    errors.value = [];
-    selectedNodeId.value = null;
+      source.value = nextSource ?? serializeDiagram(document.value);
 
-    history.clear();
-    notifyHistoryChange();
+      errors.value = [];
+      selectedNodeId.value = null;
 
-    resetViewport();
+      history.clear();
+      notifyHistoryChange();
+
+      resetViewport();
+
+      cancelAutosave();
+
+      isDirty.value = false;
+    } finally {
+      isHydrating = false;
+    }
   }
 
   return {
