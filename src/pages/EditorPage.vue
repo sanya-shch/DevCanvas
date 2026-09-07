@@ -1,26 +1,22 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import { useEditorStore } from "@/stores/editor";
+import { useThemeStore } from "@/stores/theme";
 import CodeEditor from "@/components/editor/CodeEditor.vue";
 import DiagramCanvas from "@/components/canvas/DiagramCanvas.vue";
 import NodeInspector from "@/components/canvas/NodeInspector.vue";
 import ThemeSwitcher from "@/components/theme/ThemeSwitcher.vue";
-import { exportDiagramToSvg } from "@/features/diagram/svgExporter";
-import { downloadSvg } from "@/features/diagram/svgDownload";
-import { downloadPng } from "@/features/diagram/pngDownload";
-import { useThemeStore } from "@/stores/theme";
-import { createShareUrl, getSharedDocument } from "@/features/share/shareUrl";
-import {
-  createDevCanvasFile,
-  serializeDevCanvasFile,
-  parseDevCanvasFile,
-} from "@/features/file/devcanvasFile";
-import { downloadDevCanvasFile } from "@/features/file/devcanvasFileDownload";
 import DraftRecoveryDialog from "@/features/drafts/components/DraftRecoveryDialog.vue";
 
-import type { DiagramDraft } from "@/features/drafts/types";
+import { fitCanvasToScreen } from "./editor-page/fitCanvasToScreen";
+import { useDiagramAutoParse } from "./editor-page/useDiagramAutoParse";
+import { useEditorShortcuts } from "./editor-page/useEditorShortcuts";
+import { useUnsavedChangesGuard } from "./editor-page/useUnsavedChangesGuard";
+import { useDiagramExport } from "./editor-page/useDiagramExport";
+import { useDraftRecovery } from "./editor-page/useDraftRecovery";
+import { useDiagramTitleEditing } from "./editor-page/useDiagramTitleEditing";
+import { useDiagramLifecycle } from "./editor-page/useDiagramLifecycle";
 
 const store = useEditorStore();
 const themeStore = useThemeStore();
@@ -28,293 +24,31 @@ const themeStore = useThemeStore();
 const route = useRoute();
 const router = useRouter();
 
-const recoveryDraft = ref<DiagramDraft | null>(null);
-const isRecoveringDraft = ref(false);
+const { cancelScheduledParse } = useDiagramAutoParse(store);
 
-const isEditingTitle = ref(false);
-const editingTitle = ref("");
+useEditorShortcuts(store, { cancelScheduledParse });
 
-let parseTimeout: ReturnType<typeof setTimeout> | null = null;
+const { confirmDiscardChanges } = useUnsavedChangesGuard(store);
 
-function scheduleParse() {
-  if (parseTimeout !== null) {
-    clearTimeout(parseTimeout);
-  }
+const {
+  isShareCopied,
+  handleExportSvg,
+  handleExportPng,
+  handleExportDevCanvas,
+  handleImportDevCanvas,
+  handleShare,
+} = useDiagramExport(store, themeStore, { confirmDiscardChanges });
 
-  parseTimeout = setTimeout(() => {
-    store.parse();
-    parseTimeout = null;
-  }, 250);
-}
+const { recoveryDraft, checkForRecoveryDraft, handleRecoverDraft, handleDiscardDraft } =
+  useDraftRecovery(store, { onRecovered: () => fitCanvasToScreen(store) });
 
-watch(
-  () => store.source,
-  () => {
-    scheduleParse();
-  },
-);
+const { isEditingTitle, editingTitle, startEditingTitle, finishEditingTitle } =
+  useDiagramTitleEditing(store);
 
-watch(
-  () => store.diagramId,
-  (id) => {
-    if (!id || route.query.id === id) {
-      return;
-    }
-
-    void router.replace({
-      query: {
-        ...route.query,
-        id,
-      },
-    });
-  },
-);
-
-onMounted(async () => {
-  const id = route.query.id;
-  const source = route.query.source;
-
-  if (typeof id === "string") {
-    await store.loadDiagram(id);
-  } else if (typeof source === "string") {
-    store.setSource(source);
-    store.parse();
-  } else {
-    store.createNewDiagram();
-  }
-
-  await nextTick();
-
-  requestAnimationFrame(() => {
-    const canvas = document.querySelector(".diagram-canvas");
-
-    if (!(canvas instanceof HTMLElement)) {
-      return;
-    }
-
-    store.fitToScreen(canvas.clientWidth, canvas.clientHeight);
-  });
+const { handleCreateNewDiagram } = useDiagramLifecycle(store, route, router, {
+  confirmDiscardChanges,
+  checkForRecoveryDraft,
 });
-
-function handleKeyDown(event: KeyboardEvent) {
-  const target = event.target as HTMLElement | null;
-
-  const isEditable =
-    target?.tagName === "INPUT" || target?.tagName === "TEXTAREA" || target?.isContentEditable;
-
-  /*
-   * Let Monaco and inputs handle their own
-   * keyboard shortcuts.
-   */
-  if (isEditable) {
-    return;
-  }
-
-  const modifier = event.metaKey || event.ctrlKey;
-
-  if (!modifier) {
-    if (event.key === "Escape") {
-      store.selectNode(null);
-    }
-
-    return;
-  }
-
-  const key = event.key.toLowerCase();
-
-  /*
-   * Undo
-   *
-   * Cmd/Ctrl + Z
-   */
-  if (key === "z" && !event.shiftKey) {
-    event.preventDefault();
-
-    store.undo();
-
-    return;
-  }
-
-  /*
-   * Redo
-   *
-   * Cmd/Ctrl + Shift + Z
-   */
-  if (key === "z" && event.shiftKey) {
-    event.preventDefault();
-
-    store.redo();
-
-    return;
-  }
-
-  /*
-   * Redo
-   *
-   * Cmd/Ctrl + Y
-   */
-  if (key === "y") {
-    event.preventDefault();
-
-    store.redo();
-
-    return;
-  }
-
-  /*
-   * Parse
-   *
-   * Cmd/Ctrl + Enter
-   */
-  if (key === "enter") {
-    event.preventDefault();
-
-    if (parseTimeout !== null) {
-      clearTimeout(parseTimeout);
-      parseTimeout = null;
-    }
-
-    store.parse();
-
-    return;
-  }
-
-  /*
-   * Reset viewport
-   *
-   * Cmd/Ctrl + 0
-   */
-  if (key === "0") {
-    event.preventDefault();
-
-    store.resetViewport();
-  }
-}
-
-function confirmDiscardChanges(): boolean {
-  if (!store.isDirty) {
-    return true;
-  }
-
-  return window.confirm("You have unsaved changes. Are you sure you want to discard them?");
-}
-
-async function handleCreateNewDiagram() {
-  if (!confirmDiscardChanges()) {
-    return;
-  }
-
-  await router.replace({
-    path: "/editor",
-  });
-
-  store.createNewDiagram();
-}
-
-function sanitizeFilename(value: string): string {
-  return (
-    value
-      .trim()
-      .replace(/[<>:"/\\|?*]+/g, "-")
-      .replace(/\s+/g, "-") || "diagram"
-  );
-}
-
-function handleExportDevCanvas() {
-  if (store.hasErrors || !store.document.nodes.length) {
-    return;
-  }
-
-  const file = createDevCanvasFile(store.diagramTitle, store.source, store.document);
-
-  const content = serializeDevCanvasFile(file);
-
-  downloadDevCanvasFile(content, `${sanitizeFilename(store.diagramTitle)}.devcanvas`);
-}
-
-async function handleImportDevCanvas() {
-  const input = document.createElement("input");
-
-  input.type = "file";
-  input.accept = ".devcanvas,application/json";
-
-  const file = await new Promise<File | null>((resolve) => {
-    input.onchange = () => {
-      resolve(input.files?.[0] ?? null);
-    };
-
-    input.click();
-  });
-
-  if (!file) {
-    return;
-  }
-
-  try {
-    const content = await file.text();
-    const imported = parseDevCanvasFile(content);
-
-    if (!confirmDiscardChanges()) {
-      return;
-    }
-
-    store.loadDocument(imported.document, imported.title, imported.source);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to import .devcanvas file";
-
-    window.alert(message);
-  }
-}
-
-function handleExportSvg() {
-  if (store.hasErrors || !store.document.nodes.length) {
-    return;
-  }
-
-  const svg = exportDiagramToSvg(store.document, themeStore.theme);
-
-  downloadSvg(svg, `${sanitizeFilename(store.diagramTitle)}.svg`);
-}
-
-async function handleExportPng() {
-  if (store.hasErrors || !store.document.nodes.length) {
-    return;
-  }
-
-  const svg = exportDiagramToSvg(store.document, themeStore.theme);
-
-  await downloadPng(svg, `${sanitizeFilename(store.diagramTitle)}.png`, {
-    scale: 2,
-  });
-}
-
-const isShareCopied = ref(false);
-
-let shareCopiedTimeout: ReturnType<typeof setTimeout> | null = null;
-
-async function handleShare() {
-  if (store.hasErrors || !store.document.nodes.length) {
-    return;
-  }
-
-  const url = createShareUrl(store.document);
-
-  try {
-    await navigator.clipboard.writeText(url);
-
-    isShareCopied.value = true;
-
-    if (shareCopiedTimeout !== null) {
-      clearTimeout(shareCopiedTimeout);
-    }
-
-    shareCopiedTimeout = setTimeout(() => {
-      isShareCopied.value = false;
-    }, 2000);
-  } catch {
-    isShareCopied.value = false;
-  }
-}
 
 function clearShareHash() {
   if (!window.location.hash.startsWith("#share=")) {
@@ -332,149 +66,8 @@ async function handleSave() {
   await store.saveDiagram();
   clearShareHash();
 }
-
-function startEditingTitle() {
-  editingTitle.value = store.diagramTitle;
-  isEditingTitle.value = true;
-
-  void nextTick(() => {
-    const input = document.querySelector(".diagram-title-input");
-
-    if (input instanceof HTMLInputElement) {
-      input.focus();
-      input.select();
-    }
-  });
-}
-
-function finishEditingTitle() {
-  if (!isEditingTitle.value) {
-    return;
-  }
-
-  const title = editingTitle.value.trim();
-
-  if (title) {
-    store.setDiagramTitle(title);
-  } else {
-    editingTitle.value = store.diagramTitle;
-  }
-
-  isEditingTitle.value = false;
-}
-
-function handleBeforeUnload(event: BeforeUnloadEvent) {
-  if (!store.isDirty) {
-    return;
-  }
-
-  event.preventDefault();
-  event.returnValue = "";
-}
-
-async function checkForRecoveryDraft(diagramId: string | null) {
-  const draft = await store.findRecoveryDraft(diagramId);
-
-  if (!draft) {
-    return;
-  }
-
-  recoveryDraft.value = draft;
-}
-
-async function handleRecoverDraft() {
-  const draft = recoveryDraft.value;
-
-  if (!draft || isRecoveringDraft.value) {
-    return;
-  }
-
-  isRecoveringDraft.value = true;
-
-  try {
-    const recovered = await store.recoverDraft(draft);
-
-    if (recovered) {
-      recoveryDraft.value = null;
-
-      await nextTick();
-
-      requestAnimationFrame(() => {
-        const canvas = document.querySelector(".diagram-canvas");
-
-        if (!(canvas instanceof HTMLElement)) {
-          return;
-        }
-
-        store.fitToScreen(canvas.clientWidth, canvas.clientHeight);
-      });
-    }
-  } finally {
-    isRecoveringDraft.value = false;
-  }
-}
-
-async function handleDiscardDraft() {
-  const draft = recoveryDraft.value;
-
-  if (!draft) {
-    return;
-  }
-
-  const discarded = await store.discardDraft(draft);
-
-  if (discarded) {
-    recoveryDraft.value = null;
-  }
-}
-
-onMounted(async () => {
-  const sharedDocument = getSharedDocument();
-
-  const id = route.query.id;
-  const source = route.query.source;
-
-  if (sharedDocument) {
-    store.loadDocument(sharedDocument, "Shared Diagram");
-  } else if (typeof id === "string") {
-    await store.loadDiagram(id);
-  } else if (typeof source === "string") {
-    store.setSource(source);
-    store.parse();
-  } else {
-    store.createNewDiagram();
-  }
-
-  /*
-   * Shared/source URLs represent an external document,
-   * not a normal editor session.
-   */
-  if (!sharedDocument && typeof source !== "string") {
-    const recoveryDiagramId = typeof id === "string" ? id : null;
-
-    await checkForRecoveryDraft(recoveryDiagramId);
-  }
-
-  window.addEventListener("keydown", handleKeyDown);
-
-  window.addEventListener("beforeunload", handleBeforeUnload);
-});
-
-onBeforeUnmount(() => {
-  if (shareCopiedTimeout !== null) {
-    clearTimeout(shareCopiedTimeout);
-  }
-
-  window.removeEventListener("keydown", handleKeyDown);
-
-  if (parseTimeout !== null) {
-    clearTimeout(parseTimeout);
-    parseTimeout = null;
-  }
-
-  window.removeEventListener("beforeunload", handleBeforeUnload);
-});
 </script>
+
 
 <template>
   <DraftRecoveryDialog

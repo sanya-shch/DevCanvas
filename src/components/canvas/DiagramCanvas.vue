@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref } from "vue";
 
 import { useEditorStore } from "@/stores/editor";
 import { calculateLevels } from "@/features/diagram/layout";
@@ -377,46 +377,7 @@ async function fitToScreen() {
   store.fitToScreen(viewport.clientWidth, viewport.clientHeight);
 }
 
-// -----------------------------------------------------------------------------
-// Keyboard
-// -----------------------------------------------------------------------------
-
-function handleKeyDown(event: KeyboardEvent) {
-  const target = event.target as HTMLElement | null;
-
-  const isInput =
-    target?.tagName === "INPUT" || target?.tagName === "TEXTAREA" || target?.isContentEditable;
-
-  if (isInput) {
-    return;
-  }
-
-  const modifier = event.metaKey || event.ctrlKey;
-
-  if (modifier && event.key === "0") {
-    event.preventDefault();
-
-    store.resetViewport();
-
-    return;
-  }
-
-  if (event.key === "Escape") {
-    store.selectNode(null);
-  }
-}
-
-// -----------------------------------------------------------------------------
-// Lifecycle
-// -----------------------------------------------------------------------------
-
-onMounted(() => {
-  window.addEventListener("keydown", handleKeyDown);
-});
-
 onBeforeUnmount(() => {
-  window.removeEventListener("keydown", handleKeyDown);
-
   stopNodeDrag();
   stopPan();
 });
