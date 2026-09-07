@@ -1,10 +1,20 @@
-import { nextTick, ref } from "vue";
+import { nextTick, ref, watch } from "vue";
+
+import { setDocumentTitle } from "@/app/pageTitle";
 
 import type { useEditorStore } from "@/stores/editor";
 
 export function useDiagramTitleEditing(store: ReturnType<typeof useEditorStore>) {
   const isEditingTitle = ref(false);
   const editingTitle = ref("");
+
+  watch(
+    () => store.diagramTitle,
+    (title) => {
+      setDocumentTitle(title);
+    },
+    { immediate: true },
+  );
 
   function startEditingTitle() {
     editingTitle.value = store.diagramTitle;

@@ -6,6 +6,15 @@ import { calculateLevels } from "@/features/diagram/layout";
 import DiagramNode from "./DiagramNode.vue";
 import DiagramEdge from "./DiagramEdge.vue";
 
+const props = withDefaults(
+  defineProps<{
+    readonly?: boolean;
+  }>(),
+  {
+    readonly: false,
+  },
+);
+
 const store = useEditorStore();
 
 const canvasRef = ref<SVGSVGElement | null>(null);
@@ -109,6 +118,10 @@ const transform = computed(() => {
 // -----------------------------------------------------------------------------
 
 function startNodeDrag(event: PointerEvent, nodeId: string) {
+  if (props.readonly) {
+    return;
+  }
+
   if (event.button !== 0) {
     return;
   }
@@ -324,6 +337,14 @@ function handlePointerCancel(event: PointerEvent) {
   }
 }
 
+function handleNodeSelect(nodeId: string) {
+  if (props.readonly) {
+    return;
+  }
+
+  store.selectNode(nodeId);
+}
+
 // -----------------------------------------------------------------------------
 // Zoom
 // -----------------------------------------------------------------------------
@@ -376,6 +397,18 @@ async function fitToScreen() {
 
   store.fitToScreen(viewport.clientWidth, viewport.clientHeight);
 }
+
+// -----------------------------------------------------------------------------
+// Lifecycle
+// -----------------------------------------------------------------------------
+
+/*
+ * Global keyboard shortcuts (Escape to deselect, Cmd/Ctrl+0 to reset
+ * the viewport, undo/redo, etc.) are handled once, centrally, by
+ * `useEditorShortcuts` in the parent EditorPage — this component
+ * only ever renders inside that page, so it doesn't need its own
+ * "window" keydown listener.
+ */
 
 onBeforeUnmount(() => {
   stopNodeDrag();
@@ -447,7 +480,7 @@ onBeforeUnmount(() => {
           :node="node"
           :layout="store.document.layout[node.id]"
           :selected="store.selectedNodeId === node.id"
-          @select="store.selectNode"
+          @select="handleNodeSelect"
           @drag-start="startNodeDrag"
         />
       </g>

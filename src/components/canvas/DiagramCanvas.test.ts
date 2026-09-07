@@ -21,7 +21,7 @@ B -> C["Database"]
   return store;
 }
 
-function mountCanvas() {
+function mountCanvas(props: { readonly?: boolean } = {}) {
   const pinia = createPinia();
 
   setActivePinia(pinia);
@@ -29,6 +29,7 @@ function mountCanvas() {
   const store = setupStore();
 
   const wrapper = mount(DiagramCanvas, {
+    props,
     global: {
       plugins: [pinia],
     },
@@ -150,6 +151,82 @@ describe("DiagramCanvas", () => {
     });
 
     expect(store.selectedNodeId).toBe(node.id);
+  });
+
+  it("does not move a node after dragging", async () => {
+    const { store, wrapper } = mountCanvas({ readonly: true });
+
+    const node = getFirstNode(store);
+    const nodeWrapper = getFirstNodeElement(wrapper);
+    const svg = wrapper.get("svg");
+
+    const initialLayout = store.document.layout[node.id];
+
+    expect(initialLayout).toBeDefined();
+
+    const initialX = initialLayout.x;
+    const initialY = initialLayout.y;
+
+    dispatchPointerEvent(nodeWrapper.element, "pointerdown", {
+      pointerId: 1,
+      button: 0,
+      clientX: 100,
+      clientY: 100,
+    });
+
+    dispatchPointerEvent(svg.element, "pointermove", {
+      pointerId: 1,
+      clientX: 140,
+      clientY: 140,
+    });
+
+    dispatchPointerEvent(svg.element, "pointerup", { pointerId: 1 });
+
+    await wrapper.vm.$nextTick();
+
+    expect(store.document.layout[node.id].x).toBe(initialX);
+    expect(store.document.layout[node.id].y).toBe(initialY);
+  });
+
+  it("does not select a node in readonly mode", () => {
+    const { store, wrapper } = mountCanvas({ readonly: true });
+
+    const nodeWrapper = getFirstNodeElement(wrapper);
+
+    dispatchPointerEvent(nodeWrapper.element, "pointerdown", {
+      pointerId: 1,
+      button: 0,
+      clientX: 100,
+      clientY: 100,
+    });
+
+    expect(store.selectedNodeId).toBeNull();
+  });
+
+  it("still allows panning in readonly mode", async () => {
+    const { store, wrapper } = mountCanvas({ readonly: true });
+
+    const svg = wrapper.get("svg");
+
+    dispatchPointerEvent(svg.element, "pointerdown", {
+      pointerId: 1,
+      button: 0,
+      clientX: 0,
+      clientY: 0,
+    });
+
+    dispatchPointerEvent(svg.element, "pointermove", {
+      pointerId: 1,
+      clientX: 30,
+      clientY: 40,
+    });
+
+    dispatchPointerEvent(svg.element, "pointerup", { pointerId: 1 });
+
+    await wrapper.vm.$nextTick();
+
+    expect(store.offset.x).toBe(30);
+    expect(store.offset.y).toBe(40);
   });
 
   it("moves a node after dragging", async () => {
