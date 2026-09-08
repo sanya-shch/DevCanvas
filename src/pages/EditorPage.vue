@@ -17,6 +17,7 @@ import { useDiagramExport } from "./editor-page/useDiagramExport";
 import { useDraftRecovery } from "./editor-page/useDraftRecovery";
 import { useDiagramTitleEditing } from "./editor-page/useDiagramTitleEditing";
 import { useDiagramLifecycle } from "./editor-page/useDiagramLifecycle";
+import ShortcutsHelpDialog from "./editor-page/ShortcutsHelpDialog.vue";
 
 const store = useEditorStore();
 const themeStore = useThemeStore();
@@ -26,7 +27,7 @@ const router = useRouter();
 
 const { cancelScheduledParse } = useDiagramAutoParse(store);
 
-useEditorShortcuts(store, { cancelScheduledParse });
+const { isHelpOpen, openHelp, closeHelp } = useEditorShortcuts(store, { cancelScheduledParse });
 
 const { confirmDiscardChanges } = useUnsavedChangesGuard(store);
 
@@ -68,7 +69,6 @@ async function handleSave() {
 }
 </script>
 
-
 <template>
   <DraftRecoveryDialog
     v-if="recoveryDraft"
@@ -77,11 +77,13 @@ async function handleSave() {
     @discard="handleDiscardDraft"
   />
 
-  <main class="editor-page">
+  <ShortcutsHelpDialog v-if="isHelpOpen" @close="closeHelp" />
+
+  <div class="editor-page">
     <header class="editor-header">
       <div class="editor-header-left">
         <RouterLink to="/" class="brand">
-          <span class="brand-mark"> ◆ </span>
+          <span class="brand-mark" aria-hidden="true"> ◆ </span>
 
           <span class="brand-name"> DevCanvas </span>
         </RouterLink>
@@ -133,7 +135,7 @@ async function handleSave() {
           Redo
         </button>
 
-        <div class="save-status">
+        <div class="save-status" role="status" aria-live="polite">
           <span v-if="store.autosaveError" class="save-status__error">
             {{ store.autosaveError }}
           </span>
@@ -214,11 +216,21 @@ async function handleSave() {
           Reset view
         </button>
 
+        <button
+          type="button"
+          class="header-button"
+          title="Keyboard shortcuts (?)"
+          aria-label="Show keyboard shortcuts"
+          @click="openHelp"
+        >
+          Shortcuts
+        </button>
+
         <ThemeSwitcher />
       </div>
     </header>
 
-    <section class="editor-layout">
+    <main class="editor-layout" aria-label="Diagram editor">
       <!-- Code -->
       <section class="panel code-panel">
         <div class="panel-header">
@@ -262,7 +274,7 @@ async function handleSave() {
       <section class="panel inspector-panel">
         <NodeInspector />
       </section>
-    </section>
+    </main>
 
     <footer class="editor-footer">
       <div class="footer-left">
@@ -289,7 +301,7 @@ async function handleSave() {
         </span>
       </div>
     </footer>
-  </main>
+  </div>
 </template>
 
 <style scoped>

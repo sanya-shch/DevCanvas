@@ -11,7 +11,10 @@ interface DraftRecoveryDeps {
  * Crash-recovery draft flow: checking whether an unsaved draft
  * exists for the current diagram, and recovering or discarding it.
  */
-export function useDraftRecovery(store: ReturnType<typeof useEditorStore>, deps: DraftRecoveryDeps) {
+export function useDraftRecovery(
+  store: ReturnType<typeof useEditorStore>,
+  deps: DraftRecoveryDeps,
+) {
   const recoveryDraft = ref<DiagramDraft | null>(null);
   const isRecoveringDraft = ref(false);
 

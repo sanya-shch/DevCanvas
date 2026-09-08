@@ -1,4 +1,4 @@
-import { onBeforeUnmount, onMounted } from "vue";
+import { onBeforeUnmount, onMounted, ref } from "vue";
 
 import type { useEditorStore } from "@/stores/editor";
 
@@ -10,6 +10,16 @@ export function useEditorShortcuts(
   store: ReturnType<typeof useEditorStore>,
   deps: EditorShortcutsDeps,
 ) {
+  const isHelpOpen = ref(false);
+
+  function openHelp() {
+    isHelpOpen.value = true;
+  }
+
+  function closeHelp() {
+    isHelpOpen.value = false;
+  }
+
   function handleKeyDown(event: KeyboardEvent) {
     const target = event.target as HTMLElement | null;
 
@@ -24,8 +34,45 @@ export function useEditorShortcuts(
     const modifier = event.metaKey || event.ctrlKey;
 
     if (!modifier) {
+      /*
+       * Close the help overlay first if it's open, so Escape
+       * always means "close whatever is on top" rather than also
+       * deselecting the node underneath it.
+       */
       if (event.key === "Escape") {
-        store.selectNode(null);
+        if (isHelpOpen.value) {
+          closeHelp();
+        } else {
+          store.selectNode(null);
+        }
+
+        return;
+      }
+
+      /*
+       * Delete selected node
+       *
+       * Delete / Backspace
+       */
+      if (event.key === "Delete" || event.key === "Backspace") {
+        if (store.selectedNodeId) {
+          event.preventDefault();
+
+          store.deleteNode(store.selectedNodeId);
+        }
+
+        return;
+      }
+
+      /*
+       * Shortcuts help overlay
+       *
+       * ?
+       */
+      if (event.key === "?") {
+        event.preventDefault();
+
+        openHelp();
       }
 
       return;
@@ -105,4 +152,10 @@ export function useEditorShortcuts(
   onBeforeUnmount(() => {
     window.removeEventListener("keydown", handleKeyDown);
   });
+
+  return {
+    isHelpOpen,
+    openHelp,
+    closeHelp,
+  };
 }

@@ -16,6 +16,7 @@ const props = defineProps<{
     height: number;
   };
   selected: boolean;
+  readonly?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -104,6 +105,57 @@ function handleInputKeyDown(event: KeyboardEvent) {
     cancelEditing();
   }
 }
+
+// -----------------------------------------------------------------------------
+// Keyboard operability (tab to a node, select it, nudge its position)
+// -----------------------------------------------------------------------------
+
+const NUDGE_STEP = 1;
+const NUDGE_STEP_LARGE = 10;
+
+const ARROW_DELTAS: Record<string, [number, number]> = {
+  ArrowUp: [0, -1],
+  ArrowDown: [0, 1],
+  ArrowLeft: [-1, 0],
+  ArrowRight: [1, 0],
+};
+
+function handleNodeKeyDown(event: KeyboardEvent) {
+  if (props.readonly || isEditing.value) {
+    return;
+  }
+
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+
+    emit("select", props.node.id);
+
+    return;
+  }
+
+  const delta = ARROW_DELTAS[event.key];
+
+  /*
+   * Only nudge once the node is actually selected — tabbing onto a
+   * node shouldn't immediately let arrow keys move it before the
+   * user has confirmed they mean to act on it.
+   */
+  if (delta && props.selected) {
+    event.preventDefault();
+
+    const step = event.shiftKey ? NUDGE_STEP_LARGE : NUDGE_STEP;
+
+    store.beginHistoryTransaction();
+
+    store.updateNodePosition(
+      props.node.id,
+      props.layout.x + delta[0] * step,
+      props.layout.y + delta[1] * step,
+    );
+
+    store.endHistoryTransaction();
+  }
+}
 </script>
 
 <template>
@@ -114,8 +166,13 @@ function handleInputKeyDown(event: KeyboardEvent) {
       editing: isEditing,
     }"
     :transform="`translate(${layout.x}, ${layout.y})`"
+    :tabindex="readonly ? undefined : 0"
+    :role="readonly ? undefined : 'button'"
+    :aria-label="readonly ? undefined : `${node.shape} node: ${node.label}`"
+    :aria-pressed="readonly ? undefined : selected"
     @pointerdown="handlePointerDown"
     @dblclick="startEditing"
+    @keydown="handleNodeKeyDown"
   >
     <rect v-if="node.shape === 'rectangle'" :width="layout.width" :height="layout.height" />
 
@@ -205,6 +262,18 @@ function handleInputKeyDown(event: KeyboardEvent) {
 .diagram-node.selected ellipse,
 .diagram-node.selected polygon {
   stroke: var(--accent-color);
+}
+
+.diagram-node:focus-visible {
+  outline: none;
+}
+
+.diagram-node:focus-visible rect,
+.diagram-node:focus-visible ellipse,
+.diagram-node:focus-visible polygon {
+  stroke: var(--accent-color);
+  stroke-width: 3;
+  stroke-dasharray: 4 2;
 }
 
 .diagram-node text {

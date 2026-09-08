@@ -9,7 +9,9 @@ export function documentsEqual(first: DiagramDocument, second: DiagramDocument):
 }
 
 export function cloneLayout(layout: DiagramLayout): DiagramLayout {
-  return Object.fromEntries(Object.entries(layout).map(([nodeId, value]) => [nodeId, { ...value }]));
+  return Object.fromEntries(
+    Object.entries(layout).map(([nodeId, value]) => [nodeId, { ...value }]),
+  );
 }
 
 export function cloneSourceMap(sourceMap: DiagramSourceMap): DiagramSourceMap {

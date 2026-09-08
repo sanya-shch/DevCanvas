@@ -419,11 +419,13 @@ onBeforeUnmount(() => {
 <template>
   <div ref="viewportRef" class="diagram-canvas">
     <div class="zoom-controls" @pointerdown.stop @pointermove.stop @pointerup.stop @wheel.stop>
-      <button type="button" title="Zoom out" @click="store.zoomOut()">−</button>
+      <button type="button" aria-label="Zoom out" title="Zoom out" @click="store.zoomOut()">
+        −
+      </button>
 
       <span class="zoom-value"> {{ Math.round(store.zoom * 100) }}% </span>
 
-      <button type="button" title="Zoom in" @click="store.zoomIn()">+</button>
+      <button type="button" aria-label="Zoom in" title="Zoom in" @click="store.zoomIn()">+</button>
 
       <button type="button" title="Fit diagram" @click="fitToScreen">Fit</button>
     </div>
@@ -480,6 +482,7 @@ onBeforeUnmount(() => {
           :node="node"
           :layout="store.document.layout[node.id]"
           :selected="store.selectedNodeId === node.id"
+          :readonly="readonly"
           @select="handleNodeSelect"
           @drag-start="startNodeDrag"
         />
@@ -492,7 +495,7 @@ onBeforeUnmount(() => {
       <span> Create a diagram in the editor </span>
     </div>
 
-    <div v-if="store.hasErrors" class="error-panel">
+    <div v-if="store.hasErrors" class="error-panel" role="alert" aria-live="polite">
       <div v-for="error in store.errors" :key="`${error.line}-${error.message}`" class="error">
         <strong> Line {{ error.line }} </strong>
 

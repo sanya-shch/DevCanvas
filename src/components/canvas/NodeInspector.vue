@@ -134,7 +134,7 @@ function handleKeyDown(event: KeyboardEvent) {
 <template>
   <aside class="node-inspector">
     <div v-if="!node || !layout" class="empty-inspector">
-      <div class="empty-icon">⬡</div>
+      <div class="empty-icon" aria-hidden="true">⬡</div>
 
       <h3>No node selected</h3>
 
@@ -155,6 +155,7 @@ function handleKeyDown(event: KeyboardEvent) {
           type="button"
           class="close-button"
           title="Deselect node"
+          aria-label="Deselect node"
           @click="store.selectNode(null)"
         >
           ×
