@@ -6,7 +6,7 @@ import HomePage from "@/pages/HomePage.vue";
 import { setDocumentTitle } from "./pageTitle";
 
 export const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(import.meta.env.BASE_URL),
 
   routes: [
     {
