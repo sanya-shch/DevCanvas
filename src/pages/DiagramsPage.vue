@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { onMounted } from "vue";
+import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 
 import { useDiagramsStore } from "@/stores/diagrams";
+import { describeStorageError } from "@/features/storage/storageError";
 
 const router = useRouter();
 const diagramsStore = useDiagramsStore();
+
+const deleteError = ref<string | null>(null);
 
 onMounted(() => {
   diagramsStore.loadDiagrams();
@@ -25,7 +28,13 @@ async function deleteDiagram(id: string) {
     return;
   }
 
-  await diagramsStore.removeDiagram(id);
+  deleteError.value = null;
+
+  try {
+    await diagramsStore.removeDiagram(id);
+  } catch (error) {
+    deleteError.value = describeStorageError(error);
+  }
 }
 
 function formatDate(timestamp: number) {
@@ -46,6 +55,13 @@ function formatDate(timestamp: number) {
 
       <RouterLink to="/editor" class="new-diagram-button"> New Diagram </RouterLink>
     </header>
+
+    <div v-if="deleteError" class="diagrams-banner diagrams-banner--error" role="alert">
+      {{ deleteError }}
+      <button type="button" class="diagrams-banner__dismiss" @click="deleteError = null">
+        Dismiss
+      </button>
+    </div>
 
     <div v-if="diagramsStore.isLoading" class="diagrams-state">Loading diagrams...</div>
 
@@ -132,6 +148,27 @@ function formatDate(timestamp: number) {
 
 .diagrams-state--error {
   color: var(--error-color);
+}
+
+.diagrams-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  margin-bottom: 24px;
+  border-radius: 8px;
+}
+
+.diagrams-banner--error {
+  color: var(--error-color);
+  background: color-mix(in srgb, var(--error-color) 12%, transparent);
+}
+
+.diagrams-banner__dismiss {
+  flex-shrink: 0;
+  color: inherit;
+  text-decoration: underline;
 }
 
 .diagram-grid {

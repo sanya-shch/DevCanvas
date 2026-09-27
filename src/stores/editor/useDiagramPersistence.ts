@@ -10,6 +10,7 @@ import {
   saveDraft as saveDraftToStorage,
 } from "@/features/drafts/draftRepository";
 import { generateDraftId } from "@/features/drafts/draftStorage";
+import { describeStorageError } from "@/features/storage/storageError";
 
 import { cloneDocument, cloneLayout, cloneSourceMap } from "./cloneHelpers";
 
@@ -304,7 +305,7 @@ export function useDiagramPersistence(state: EditorState, deps: DiagramPersisten
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error("Failed to save diagram:", error);
-      autosaveError.value = "Failed to save diagram.";
+      autosaveError.value = describeStorageError(error);
     } finally {
       isSaving.value = false;
 

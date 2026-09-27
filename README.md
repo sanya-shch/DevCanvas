@@ -1,6 +1,7 @@
 # DevCanvas
 
 [![CI](https://github.com/sanya-shch/DevCanvas/actions/workflows/ci.yml/badge.svg)](https://github.com/sanya-shch/DevCanvas/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/sanya-shch/DevCanvas/graph/badge.svg)](https://codecov.io/gh/sanya-shch/DevCanvas)
 [![License: MIT](https://img.shields.io/github/license/sanya-shch/DevCanvas)](LICENSE)
 
 A diagram-as-code editor: write a small text DSL on one side, see it rendered

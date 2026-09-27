@@ -1,3 +1,5 @@
+import { INDEXED_DB_UNAVAILABLE_MESSAGE } from "./storageError";
+
 const DB_NAME = "devcanvas";
 const DB_VERSION = 2;
 
@@ -6,6 +8,11 @@ export const DRAFTS_STORE = "drafts";
 
 export function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
+    if (typeof indexedDB === "undefined") {
+      reject(new Error(INDEXED_DB_UNAVAILABLE_MESSAGE));
+      return;
+    }
+
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
     request.onerror = () => {

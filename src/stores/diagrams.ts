@@ -7,7 +7,7 @@ import {
   getDiagram,
   saveDiagram as drSaveDiagram,
 } from "@/features/diagrams/diagramRepository";
-
+import { describeStorageError } from "@/features/storage/storageError";
 import type { SavedDiagram } from "@/features/diagrams/types";
 
 export const useDiagramsStore = defineStore("diagrams", () => {
@@ -27,8 +27,8 @@ export const useDiagramsStore = defineStore("diagrams", () => {
 
     try {
       diagrams.value = await getAllDiagrams();
-    } catch {
-      error.value = "Failed to load saved diagrams.";
+    } catch (cause) {
+      error.value = describeStorageError(cause);
     } finally {
       isLoading.value = false;
     }
