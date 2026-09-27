@@ -107,8 +107,17 @@ for dropping into an `<iframe>` on another page:
   width="100%"
   height="400"
   style="border: 0"
+  sandbox="allow-scripts allow-popups"
 ></iframe>
 ```
+
+The embed itself is read-only, writes nothing to local storage, and never
+touches the host page's cookies or storage — but as a general rule for
+embedding any third-party iframe, scope its permissions with sandbox
+rather than trusting it by default. allow-scripts is required (it's a
+Vue app); allow-popups lets the "Edit on DevCanvas" badge open in a new
+tab. Omit allow-same-origin unless you specifically need it — this embed
+doesn't.
 
 Supported query parameters:
 
@@ -159,6 +168,39 @@ npm run test:e2e
 Crash-recovery drafts are covered at the unit level only — the recovery flow
 depends on catching a real interrupted save mid-flight, which is inherently
 timing-based and not something to script reliably in browser automation.
+
+## Performance
+
+Edge routing avoids overlapping nodes, which means routing a single edge
+costs O(nodes) — it has to check every other node as a potential obstacle.
+That makes a full re-route pass (what happens on every node-drag frame,
+since a moved node can change any edge's obstacle set) roughly O(nodes ×
+edges).
+
+npm run bench measures this directly against the real routing code with
+synthetic diagrams, rather than asserting a Big-O claim without a number
+behind it:
+
+```
+npm run bench
+
+nodes=   25  edges=   27  full-reroute=    0.54ms  ok
+nodes=   50  edges=   56  full-reroute=    0.80ms  ok
+nodes=  100  edges=  114  full-reroute=    2.47ms  ok
+nodes=  200  edges=  229  full-reroute=    8.57ms  ok
+nodes=  400  edges=  459  full-reroute=   32.77ms  ⚠️  below 60fps
+nodes=  800  edges=  918  full-reroute=  127.23ms  ⚠️  below 60fps
+nodes= 1500  edges= 1724  full-reroute=  446.44ms  ⚠️  below 60fps
+```
+
+In practice: dragging stays smooth up to roughly 200 nodes. Beyond
+that, node dragging gets visibly laggy because every edge reroutes around
+every other node on every pointer-move frame — this is a real, measured
+ceiling, not a theoretical one. DevCanvas is built for the size of diagram
+you'd actually draw by hand (architecture diagrams, flowcharts, a handful
+of dozens of nodes), not for rendering generated graphs with thousands of
+nodes; there's no virtualization or obstacle-set caching, so that's the
+honest range to expect it to stay responsive in today.
 
 ## Project structure
 
