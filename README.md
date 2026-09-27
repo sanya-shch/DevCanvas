@@ -1,5 +1,8 @@
 # DevCanvas
 
+[![CI](https://github.com/sanya-shch/DevCanvas/actions/workflows/ci.yml/badge.svg)](https://github.com/sanya-shch/DevCanvas/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/github/license/sanya-shch/DevCanvas)](LICENSE)
+
 A diagram-as-code editor: write a small text DSL on one side, see it rendered
 as an interactive flowchart on the other — auto-laid-out, draggable,
 exportable, and shareable via a URL.

@@ -15,5 +15,17 @@ export default defineConfig({
     globals: true,
     environment: "jsdom",
     exclude: ["**/node_modules/**", "**/dist/**", "e2e/**"],
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "lcov", "html"],
+      exclude: [
+        "**/node_modules/**",
+        "**/dist/**",
+        "e2e/**",
+        "**/*.config.*",
+        "**/*.d.ts",
+        "src/main.ts",
+      ],
+    },
   },
 });
